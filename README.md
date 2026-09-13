@@ -1,3 +1,9 @@
+<p align="center">
+  <img src="docs/images/drydock-logo.png" alt="Drydock logo" height="80">
+  &nbsp;&nbsp;&nbsp;
+  <img src="docs/images/exasol-logo.png" alt="Exasol logo" height="80">
+</p>
+
 # Drydock
 
 **Safe writes for AI agents on Exasol.**
