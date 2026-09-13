@@ -69,12 +69,13 @@
 <section class="slide">
   <div class="kicker">The problem</div>
   <h2>AI agents can now reach your database.<br>Writing is where it gets dangerous.</h2>
-  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:60px;">
+  <p class="lead" style="margin-top:26px;">Two customer databases after an acquisition. An agent is asked to merge them, and a father and son at one address become a single customer: one person's loan history, gone. The SQL looked fine.</p>
+  <div class="grid" style="grid-template-columns:repeat(3,1fr);margin-top:44px;">
     <div class="card stat"><div class="tag" style="color:var(--blue)">Reading</div><div class="l" style="font-size:22px;margin-top:14px;color:var(--ink)">Agents connect through MCP and query data. Low risk: nothing changes.</div></div>
     <div class="card stat"><div class="tag" style="color:var(--red)">Writing</div><div class="l" style="font-size:22px;margin-top:14px;color:var(--ink)">One wrong <code>UPDATE</code> or a bad merge silently corrupts the customer master.</div></div>
     <div class="card stat"><div class="tag" style="color:var(--amber)">Today</div><div class="l" style="font-size:22px;margin-top:14px;color:var(--ink)">Exasol's official MCP server ships with writes switched off. The safe write path is missing.</div></div>
   </div>
-  <p class="lead" style="margin-top:56px;">Approving an agent's <b>SQL text</b> is guesswork: it is a prediction of what the statement will do. Reviewers need to see the <b>effect</b>.</p>
+  <p class="lead" style="margin-top:44px;">Approving an agent's <b>SQL text</b> is guesswork: it is a prediction of what the statement will do. Reviewers need to see the <b>effect</b>.</p>
   <div class="foot"><span><b>DRYDOCK</b></span><span>2</span></div>
 </section>
 
