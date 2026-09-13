@@ -153,7 +153,7 @@ def apply(db: Db, merge_id: int, resolved_by: str = "human") -> dict:
                     db.run(rename_sql(GOLDEN, t, arch))
                     db.run(rename_sql(GOLDEN, new, t))
                     db.run(f"UPDATE DRYDOCK.MERGES SET SWAP_STAGE = 'SWAPPED' WHERE MERGE_ID = {mid}")
-            else:  # V4 FAIL: non-transactional DDL. Disclosed two-statement window.
+            else:  # V4 FAIL: DDL is not transactional; SWAP_STAGE lets recover() finish the swap.
                 db.run(rename_sql(GOLDEN, t, arch))
                 db.run(f"UPDATE DRYDOCK.MERGES SET SWAP_STAGE = 'ARCHIVED' WHERE MERGE_ID = {mid}")
                 db.run(rename_sql(GOLDEN, new, t))

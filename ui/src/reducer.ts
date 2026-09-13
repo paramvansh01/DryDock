@@ -162,7 +162,7 @@ export function reduce(s: State, e: DrydockEvent): State {
     case "unmerge.applied":
       return { ...upsert(s, bid!, b => ({ ...b, unmerged: p as any, status: "UNMERGED" })),
                narrative: narr(s, { ts: e.ts, kind: "unmerge", branchId: bid, tone: p.fingerprint_match ? "good" : "bad",
-                 text: `unmerged merge ${p.merge_id}: fingerprint ${p.fingerprint_match ? "matches ✓" : "MISMATCH ✗"}` }) };
+                 text: `unmerged merge ${p.merge_id}: fingerprint ${p.fingerprint_match ? "matches" : "does not match"}` }) };
     case "policy.adapted":
       return { ...s, minConfidence: p.min_confidence_after, narrative: narr(s, { ts: e.ts, kind: "policy", tone: "warn",
                  text: `min confidence ${p.min_confidence_before} → ${p.min_confidence_after} (${p.reason})` }) };

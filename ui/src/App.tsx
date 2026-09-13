@@ -1,5 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
-import { FileText, Play, X } from "lucide-react";
+import { Check, FileText, Play, X } from "lucide-react";
 import { useEffect, useMemo, useReducer, useState } from "react";
 import { api } from "./api";
 import { KpiRow, Nav, Stepper, type Tab } from "./components/Shell";
@@ -132,8 +132,8 @@ export default function App() {
               <motion.div initial={{ x: 60 }} animate={{ x: -40 }} transition={{ duration: 0.9 }} className="card px-6 py-4 font-mono text-tide">GOLDEN (pre-merge)</motion.div>
               <motion.div initial={{ x: -60 }} animate={{ x: 40 }} transition={{ duration: 0.9 }} className="card px-6 py-4 font-mono text-mist">merged image → __UNDONE_</motion.div>
             </div>
-            <div className={`absolute mt-40 text-2xl font-bold ${flash.match ? "text-kelp" : "text-flare"}`}>
-              {flash.match ? "FP_MATCH ✓" : "FINGERPRINT MISMATCH ✗"}
+            <div className={`absolute mt-40 flex items-center gap-2 text-2xl font-bold ${flash.match ? "text-kelp" : "text-flare"}`}>
+              {flash.match ? <><Check className="h-7 w-7" strokeWidth={3} />Fingerprint match</> : <><X className="h-7 w-7" strokeWidth={3} />Fingerprint mismatch</>}
             </div>
           </motion.div>
         )}

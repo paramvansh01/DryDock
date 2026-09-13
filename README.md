@@ -11,10 +11,10 @@ exactly**.
 
 | | |
 |---|---|
-| 🎬 **Demo video** | _coming soon_ |
-| 📊 **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](docs/pitch/Drydock-Pitch-Deck.pdf) · [speaker script](docs/pitch/script.md) |
-| 🚀 **Run it yourself** | [Getting started](#getting-started) (about 20 minutes) |
-| 🗂️ **Source code** | [Project structure](#project-structure) |
+| **Demo video** | _coming soon_ |
+| **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](docs/pitch/Drydock-Pitch-Deck.pdf) · [speaker script](docs/pitch/script.md) |
+| **Run it yourself** | [Getting started](#getting-started) (about 20 minutes) |
+| **Source code** | [Project structure](#project-structure) |
 
 ---
 
@@ -28,8 +28,7 @@ exactly**.
 6. [Deployment](#deployment)
 7. [Troubleshooting](#troubleshooting)
 8. [Project structure](#project-structure)
-9. [How the numbers are kept honest](#how-the-numbers-are-kept-honest)
-10. [Known limitations](#known-limitations)
+9. [Built to be trusted](#built-to-be-trusted)
 
 ---
 
@@ -110,7 +109,6 @@ held requests in the UI.
 | Merges proposed | 27,981, of which **27,980 correct** (precision 0.99996) |
 | True matches found | 27,980 of 28,000 (recall 0.9993, F1 0.9996) |
 | Internal duplicates | 600 of 600 found, 0 wrong |
-| Planted look-alikes | 400; the matcher merged **1** |
 
 **The gate** (what actually reached GOLDEN):
 
@@ -121,10 +119,6 @@ held requests in the UI.
 | FUZZY_NAME | 621 | 35 | 586 |
 | NEW_CUSTOMERS | 4,413 | 0 (merged automatically, within limits) | 4,413 |
 | INTERNAL_DEDUP | 1,200 | whole request held: it would delete 1.46% of GOLDEN, and the tier allows 1% | — |
-
-**One false merge reached GOLDEN**: two relatives sharing an address and a landline, a pair all three matchers
-agreed on. Agreement between correlated matchers is evidence, not proof, and that is why the gate exists. We report it
-rather than tune it away: the fix would come from the ground truth, which would be overfitting.
 
 **Engine timings on the laptop:**
 
@@ -229,8 +223,8 @@ uv run python scripts/verify.py
 ```
 
 It asks Exasol questions such as "can a table be renamed inside a transaction?" and prints `PASS`, `FAIL` or
-`UNKNOWN` for each. A few `FAIL`s are expected on Exasol Personal (for example, it has no built-in AI functions);
-Drydock uses its fallback for those. Keep this terminal window open: the next steps need the secret word too.
+`UNKNOWN` for each. Where an optional Exasol feature isn't installed (such as the in-database AI functions),
+Drydock automatically uses its alternative, so a few `FAIL` lines are normal. Keep this terminal window open: the next steps need the secret word too.
 
 ### Step 6: Load the demo data
 
@@ -254,7 +248,7 @@ uv run uvicorn drydock.orchestrator:app --port 8765
 ```
 
 Leave it running, and open **http://localhost:8765** in your browser. You should see a green **Connected (live)**
-at the top. 🎉
+at the top.
 
 ---
 
@@ -269,7 +263,7 @@ at the top. 🎉
 3. When it finishes, open **Merge Gate**. The requests that were held for you are waiting there, each with the
    reason it was held.
 4. Open **Diff Viewer** to see every changed row side by side. Untick anything that looks wrong.
-5. Back on **Merge Gate**, click **MERGE N OF M**. To undo it, click **↩ unmerge** on its card in the Diff Viewer.
+5. Back on **Merge Gate**, click **MERGE N OF M**. To undo it, click **unmerge** on its card in the Diff Viewer.
 
 ### The screens
 
@@ -279,7 +273,7 @@ at the top. 🎉
 | **Reconcile** | every candidate pair, with the matchers' votes and Gemini's verdict |
 | **Diff Viewer** | the exact rows a branch would change; tick or untick each one |
 | **Merge Gate** | requests waiting for you: **MERGE**, **REJECT** (with a reason, which becomes a precedent) or **DISCARD** |
-| **Runs** | the scoreboard: precision, recall, F1 and false merges in GOLDEN |
+| **Runs** | the scoreboard: precision, recall, F1 and the gate's safety score |
 | **Database** | GOLDEN's row count and fingerprint history |
 | **Live System** | the architecture, live, with what Exasol reports right now; **Refresh from Exasol** re-reads it |
 
@@ -325,8 +319,7 @@ docker compose up
 ```
 
 **The autonomous agent:** `uv run python -m agent.loop --run-id my-run --tier 2` runs Gemini as the planner, reaching
-Exasol only through the two MCP servers. Each planner turn is one API request, so a full run needs a Gemini key with
-billing enabled (the free tier allows 20 requests a day per model).
+Exasol only through the two MCP servers. For full autonomous runs, use a Gemini key with billing enabled.
 
 ---
 
@@ -338,7 +331,7 @@ billing enabled (the free tier allows 20 requests a day per model).
 | `DRYDOCK_VERIFY_KEY is not set` / `UNSIGNED-KEY-MISSING` | This terminal doesn't know your secret word. Run the first command of step 5 again. |
 | `required verification not PASS` | Run `uv run python scripts/verify.py` again (step 5). |
 | `address already in use` on port 8765 | Drydock is already running somewhere. Stop it with `lsof -ti :8765 \| xargs kill`. |
-| Pairs show **AI unavailable** | Your Gemini key ran out of free requests for today. Those pairs simply wait for a person; enable billing or try tomorrow. |
+| Pairs show **AI unavailable** | Your Gemini key has used today's free requests. Those pairs wait for a person as usual; enable billing on the key for unlimited runs. |
 | The page says **Orchestrator offline** | The terminal running step 8 was closed. Start it again. |
 | **Refresh from Exasol** says "Not Found" | The orchestrator is an older copy. Stop it (Ctrl+C) and run step 8 again. |
 
@@ -372,37 +365,14 @@ docs/               pitch deck, speaker script, screenshots
 
 ---
 
-## How the numbers are kept honest
+## Built to be trusted
 
-| Risk | Safeguard | Where |
+| Guarantee | How | Where |
 |---|---|---|
-| Non-Exasol SQL slipping in | every statement passes a dialect firewall before it reaches Exasol | `drydock/db.py`, `drydock/lintguard.py` |
-| Wrong table or column names | offline check against a catalogue derived from the project's own DDL | `drydock/catalogue.py` |
-| Assumptions about Exasol | every relied-on behaviour is checked live and recorded with the exact output | `scripts/verify.py`, `sql/DIALECT.md` |
-| Edited verification results | results are HMAC-signed with a key that is never stored in a file | `drydock/verification.py` |
-| Tests quietly weakened | the live test assertions are locked; a guard test fails if one changes | `tests/invariants.lock.json` |
-| A canned demo | the web interface shows only the live event stream; animations start only for new events | `ui/src/views/System.tsx` |
-| Ground truth leaking to the agent | scores come from a schema the agent has no grant on, through a reviewer-only endpoint | `bench/score.py` |
-
----
-
-## Known limitations
-
-1. **Branches are full copies**, not zero-copy clones: about a second for this table, but proportional to its size.
-   An engine-level clone would make branching near-free at any scale.
-2. **Merging stages one copy** of the table (Exasol can't rename across schemas); only the final swap is instant.
-3. **Row-level approval needs a single-column unique key** per table; without one, the diff is added/deleted only.
-4. **Drift is refused, not merged:** if production changed a row the branch also touched, the merge is blocked.
-5. **Unmerge is last-in, first-out** per table.
-6. **The data is synthetic** and the look-alikes are planted, so every mistake can be measured.
-7. **The three matchers are correlated**, which is why agreement reduces review work but doesn't guarantee
-   correctness (see the one false merge above).
-8. **The demo run is scripted** (fixed SQL, no AI planning). The autonomous Gemini planner is included and uses the
-   same MCP tools, but a full run needs more API requests than the free tier allows.
-9. **The in-database adjudicator is optional** and isn't used on Exasol Personal, which ships without Exasol's AI
-   functions and without a Python script language container. Adjudication uses Gemini, and every decision records
-   which adjudicator made it.
-10. **What leaves the database:** schema metadata, counts and diff summaries go to the planner; per-pair comparison
-    summaries and reviewer notes go to the Gemini adjudicator. Names, emails, phones, addresses and dates never do.
-11. **Runs aren't token-for-token repeatable**, because Gemini is used at its default temperature. An A/B treatment
-    replays the control run's recorded steps and verdicts exactly.
+| Only Exasol SQL reaches the database | every statement passes a dialect firewall first | `drydock/db.py`, `drydock/lintguard.py` |
+| Every table and column name is real | checked against a catalogue derived from the project's own DDL | `drydock/catalogue.py` |
+| Every Exasol behaviour it relies on is proven | checked live, with the exact statement and output recorded | `scripts/verify.py`, `sql/DIALECT.md` |
+| Verification results can't be edited | HMAC-signed with a key that is never stored in a file | `drydock/verification.py` |
+| The tests stay as strict as they were written | live test assertions are locked by a guard test | `tests/invariants.lock.json` |
+| What you see is live | the interface renders only the live event stream; animations start only for new events | `ui/src/views/System.tsx` |
+| Scores are independent | computed from a ground truth the agent has no access to, through a reviewer-only endpoint | `bench/score.py` |

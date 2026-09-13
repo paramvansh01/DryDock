@@ -23,7 +23,7 @@ live probing (scripts/probe.py) carry the weight.
 Runtime use: drydock modules that GENERATE SQL call assert_clean(sql) on the
 final rendered string before executing it.
 
-Files whose SQL is deliberately experimental (verify.py probes, lint tests)
+Files whose SQL deliberately probes constructs (verify.py probes, lint tests)
 declare  __dialect_lint__ = "exempt"  at module level and are skipped.
 """
 

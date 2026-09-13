@@ -242,7 +242,7 @@ export function flowsFor(e: DrydockEvent, s: State): Flow[] {
       return [{ hops: [E.orch_branches], color: C.bad, nodes: ["orch", "branches"], rows: ["BRANCHES"], label: `${e.branch_id} expired (idle)` }];
     case "unmerge.applied":
       return [{ hops: [E.human_orch, E.orch_golden], color: p.fingerprint_match ? C.merge : C.bad, nodes: ["human", "orch", "golden"],
-        rows: ["MERGES"], label: `unmerge #${p.merge_id} · fingerprint ${p.fingerprint_match ? "matches ✓" : "MISMATCH ✗"}` }];
+        rows: ["MERGES"], label: `unmerge #${p.merge_id} · fingerprint ${p.fingerprint_match ? "matches" : "does not match"}` }];
     case "policy.adapted":
       return [{ hops: [], color: C.review, nodes: ["orch"] }];
     case "score.updated":

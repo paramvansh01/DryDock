@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { Check, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api";
 import type { State } from "../types";
@@ -31,11 +32,11 @@ export function Strip({ s, focus, onFocus, canAct }: { s: State; focus: string |
               <div className="mt-0.5 text-[11px] text-mist">{b.cls || "—"}{rows != null ? ` · ${fmt(rows)} rows` : ""}</div>
               {b.status === "MERGED" && b.applied && (
                 <span role="button" onClick={(e) => { e.stopPropagation(); if (canAct && busy !== id) unmerge(id, b.applied!.merge_id); }}
-                  className={`mt-1 inline-block text-[11px] ${canAct ? "text-sky hover:underline" : "text-mist"}`}>↩ unmerge</span>
+                  className={`mt-1 inline-flex items-center gap-1 text-[11px] ${canAct ? "text-sky hover:underline" : "text-mist"}`}><Undo2 className="h-3 w-3" />unmerge</span>
               )}
               {b.unmerged && (
-                <div className={`mt-1 text-[11px] ${b.unmerged.fingerprint_match ? "text-kelp" : "text-flare"}`}>
-                  {b.unmerged.fingerprint_match ? "FP_MATCH ✓ restored" : "FINGERPRINT MISMATCH ✗"}
+                <div className={`mt-1 flex items-center gap-1 text-[11px] ${b.unmerged.fingerprint_match ? "text-kelp" : "text-flare"}`}>
+                  {b.unmerged.fingerprint_match ? <><Check className="h-3 w-3" />fingerprint match · restored</> : <><X className="h-3 w-3" />fingerprint mismatch</>}
                 </div>
               )}
             </motion.button>

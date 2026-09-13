@@ -1,4 +1,5 @@
 import { AnimatePresence, motion } from "framer-motion";
+import { Scale, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "../api";
 import type { Branch, Card, Pair, Rec } from "../types";
@@ -98,7 +99,7 @@ function PairCard({ card, pair, mapping }: { card: Card; pair: Pair; mapping?: R
       </div>
       {pair.precedents.map((pr) => (
         <div key={pr.id} className="rounded border border-sky/30 bg-sky/5 px-2 py-1 text-[12px] text-fog">
-          ⚖ precedent #{pr.id} <span className={pr.verdict === "REJECTED" ? "text-flare" : "text-kelp"}>{pr.verdict}</span>
+          <Scale className="mr-1 inline h-3.5 w-3.5 -translate-y-px text-sky" />precedent #{pr.id} <span className={pr.verdict === "REJECTED" ? "text-flare" : "text-kelp"}>{pr.verdict}</span>
           {pr.note && <> — “{pr.note}”</>}
           <span className="text-mist"> {pr.by ? `— ${pr.by}` : ""}</span>
         </div>
@@ -219,7 +220,7 @@ export function Diff({ branch, mapping, canAct, replay }: { branch: Branch | nul
                   {bars.map(({ c, n, w, rare }) => (
                     <button key={c} onClick={() => setCol(col === c ? null : c)}
                       className={`grid w-full grid-cols-[130px_1fr_60px] items-center gap-2 text-left text-xs ${col === c ? "text-tide" : "text-fog"}`}>
-                      <span className="truncate font-mono">{c} {rare && <span className="text-brass" title="touched on very few rows — look here first">⚠</span>}</span>
+                      <span className="truncate font-mono">{c} {rare && <span className="text-brass" title="touched on very few rows — look here first"><TriangleAlert className="inline h-3 w-3 -translate-y-px" /></span>}</span>
                       <span className="h-2.5 overflow-hidden rounded-sm bg-deck">
                         <motion.span className={`block h-full ${rare ? "bg-brass" : "bg-tide/70"}`} initial={{ width: 0 }} animate={{ width: `${Math.max(0.6, w * 100)}%` }} transition={{ duration: 0.8 }} />
                       </span>

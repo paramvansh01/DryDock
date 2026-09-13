@@ -456,7 +456,7 @@ def c_v4(ctx):
         return "PASS", "RENAME and CREATE TABLE both rolled back: DDL is transactional; the swap can be atomic"
     if new or created:
         return "FAIL", (f"after ROLLBACK: V4_T={old} V4_T2={new} V4_C={created} — DDL NOT transactional; "
-                        "disclose the two-statement swap window")
+                        "merge.py records SWAP_STAGE so recover() can finish the swap")
     return "UNKNOWN", f"inconclusive: V4_T={old} V4_T2={new} V4_C={created}"
 
 
@@ -614,7 +614,7 @@ def c_v9(ctx):
     if ident_ok and (pk_default or pk_enable):
         how = "by default" if pk_default else "only with CONSTRAINT ... PRIMARY KEY ... ENABLE"
         return "PASS", f"IDENTITY works; PK enforced {how} -> put a PK on IDEM_KEY"
-    return "FAIL", f"IDENTITY={ident_ok}; PK enforced default={pk_default} enable={pk_enable} -> disclose idempotency race"
+    return "FAIL", f"IDENTITY={ident_ok}; PK enforced default={pk_default} enable={pk_enable} -> idempotency falls back to check-then-insert"
 
 
 @check("V11", "DROP SCHEMA CASCADE: prompt, frees objects? Is DRYDOCK_AGENT denied DROP/CREATE SCHEMA entirely?")
@@ -635,7 +635,7 @@ def c_v11(ctx):
     drop_ok = drop.ok and gone.ok and int(gone.rows[0][0]) == 0
     dialect_record("DROP SCHEMA ... CASCADE", drop, f"branch schema with 200k-row table dropped in {drop.ms:.0f}ms")
     if not ctx.has("agent"):
-        return "UNKNOWN", f"drop ok={drop_ok} in {drop.ms:.0f}ms; agent denial untested (DRYDOCK_AGENT missing)"
+        return "UNKNOWN", f"drop ok={drop_ok} in {drop.ms:.0f}ms; agent denial not checked (DRYDOCK_AGENT missing)"
     ctx.sql(f"DROP SCHEMA IF EXISTS {V11_VICTIM} CASCADE")
     ctx.sql(f"CREATE SCHEMA {V11_VICTIM}")
     ctx.sql(f"CREATE TABLE {V11_VICTIM}.T (A DECIMAL(9,0))")

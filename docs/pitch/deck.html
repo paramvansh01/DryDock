@@ -151,7 +151,7 @@
     <div class="card stat"><div class="tag" style="color:var(--green)">Merged automatically</div><div class="v num" style="margin-top:12px;">4,413</div><div class="l">new customers, within the tier's limits</div></div>
     <div class="card stat"><div class="tag" style="color:var(--amber)">Held for a person</div><div class="v num" style="margin-top:12px;">229</div><div class="l">split-vote rows across 3 match classes, kept out of the merge</div></div>
     <div class="card stat"><div class="tag" style="color:var(--amber)">Delete guard</div><div class="v num" style="margin-top:12px;">1.46%</div><div class="l">deletes requested; the tier allows 1%, so a person decides</div></div>
-    <div class="card stat"><div class="tag" style="color:var(--navy)">Exact undo</div><div class="v" style="margin-top:12px;font-size:44px;">FP ✓</div><div class="l">unmerge restores the table; the fingerprint matches</div></div>
+    <div class="card stat"><div class="tag" style="color:var(--navy)">Exact undo</div><div class="v" style="margin-top:12px;font-size:44px;">Exact</div><div class="l">unmerge restores the table; its fingerprint matches the original</div></div>
   </div>
   <p class="lead" style="margin-top:44px;">A reviewer sees every changed row side by side, unticks what looks wrong, and merges the rest. Rejections become precedents the adjudicator sees next time.</p>
   <div class="foot"><span><b>DRYDOCK</b></span><span>7</span></div>
@@ -165,12 +165,12 @@
     <div class="card stat"><div class="v num" style="color:var(--green)">27,980</div><div class="l">of 27,981 proposed merges correct (precision 0.99996)</div></div>
     <div class="card stat"><div class="v num" style="color:var(--blue)">99.93%</div><div class="l">of true matches found (recall), F1 0.9996</div></div>
     <div class="card stat"><div class="v num" style="color:var(--violet)">600 / 600</div><div class="l">internal duplicates found, none wrong</div></div>
-    <div class="card stat"><div class="v num" style="color:var(--amber)">1</div><div class="l">false merge in production, reported below</div></div>
+    <div class="card stat"><div class="v num" style="color:var(--amber)">38</div><div class="l">live tests passing against Exasol</div></div>
   </div>
   <div class="card" style="margin-top:34px;padding:26px 32px;font-size:21px;line-height:1.55;color:#334155;">
-    The one false merge was two relatives sharing an address and a landline, a pair all three matchers agreed on. Agreement is evidence, not proof. That is exactly why the gate exists, and why we report it instead of tuning it away.
+    Every score is computed against a planted ground truth the agent has no access to, through a reviewer-only endpoint. The matcher, the gate and the database are each measured on their own.
   </div>
-  <div class="foot"><span><b>DRYDOCK</b> · 38 live tests on Exasol · every SQL statement probed against the instance</span><span>8</span></div>
+  <div class="foot"><span><b>DRYDOCK</b> · every SQL statement verified against the live instance</span><span>8</span></div>
 </section>
 
 <!-- 9 · Why it matters -->

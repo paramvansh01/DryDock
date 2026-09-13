@@ -1,5 +1,5 @@
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CircleCheck, Database, ExternalLink, Filter, ListChecks,
-  Search, ShieldAlert, Sparkles, TriangleAlert, X } from "lucide-react";
+  Scale, Search, ShieldAlert, Sparkles, TriangleAlert, X } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import { api } from "../api";
 import { type FilterKey, type MatchRow, type SortKey, FIELD_LABEL, compareFields, filterSort, matchRows,
@@ -299,7 +299,7 @@ function PairDetail({ s, row, idx, total, busy, editable, onPrev, onNext, onClos
           </div>
           {p.precedents.map((pr) => (
             <div key={pr.id} className="mt-2 rounded-md border border-tide/20 bg-tide/5 px-3 py-1.5 text-[12px] text-fog">
-              ⚖ Precedent #{pr.id} <span className={pr.verdict === "REJECTED" ? "text-flare" : "text-kelp"}>{pr.verdict}</span>{pr.note ? ` — “${pr.note}”` : ""}
+              <Scale className="mr-1 inline h-3.5 w-3.5 -translate-y-px text-tide" />Precedent #{pr.id} <span className={pr.verdict === "REJECTED" ? "text-flare" : "text-kelp"}>{pr.verdict}</span>{pr.note ? ` — “${pr.note}”` : ""}
             </div>
           ))}
         </div>
