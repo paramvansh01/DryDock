@@ -1,0 +1,3 @@
+#!/bin/sh
+# Gates 1+2 on every commit. Install: git config core.hooksPath .githooks
+exec uv run python scripts/dialect_lint.py --quiet

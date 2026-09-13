@@ -1,0 +1,19 @@
+# Optional: run the orchestrator in a container. Exasol runs outside it (e.g. Exasol Personal on the host).
+#   cd ui && npm ci && npm run build      # the orchestrator serves ui/dist
+#   export DRYDOCK_VERIFY_KEY=...         # the same key you gave scripts/verify.py
+#   docker compose up
+services:
+  orchestrator:
+    image: ghcr.io/astral-sh/uv:python3.12-bookworm-slim
+    working_dir: /app
+    volumes:
+      - .:/app
+    env_file: .env          # DSN + credentials; DRYDOCK_VERIFY_KEY comes from your shell, never a file
+    environment:
+      DRYDOCK_VERIFY_KEY: ${DRYDOCK_VERIFY_KEY:?export DRYDOCK_VERIFY_KEY in your shell}
+      DRYDOCK_EVENT_URL: http://127.0.0.1:8765/internal/events
+    command: uv run uvicorn drydock.orchestrator:app --host 0.0.0.0 --port 8765
+    ports:
+      - "8765:8765"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"   # set EXA_DSN=host.docker.internal:8563 when Exasol runs on the host

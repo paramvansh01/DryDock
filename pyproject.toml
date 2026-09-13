@@ -1,0 +1,44 @@
+[project]
+name = "drydock"
+version = "0.1.0"
+description = "A governed write path for AI agents on Exasol."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "faker>=40.38.0",
+    "fastapi>=0.141.1",
+    "google-genai>=2.23.0",
+    "httpx>=0.28.1",
+    "mcp>=2.2.0",
+    "pyexasol>=2.4.0",
+    "python-dotenv>=1.2.3",
+    "sqlglot>=30.18.0",
+    "uvicorn[standard]>=0.52.4",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.7",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = [".", "scripts"]
+
+[tool.pyright]
+extraPaths = ["scripts"]
+
+[tool.ruff]
+line-length = 140
+
+[tool.ruff.lint]
+select = ["E", "F", "W"]
+
+[tool.ruff.lint.per-file-ignores]
+"scripts/verify.py" = ["E501"]
+"agent/loop.py" = ["E501"]
+"drydock/adjudicate.py" = ["E501"]
+"scripts/probe_all.py" = ["E501"]
+"tests/fixtures/make_fixture.py" = ["E501"]
+"tests/*.py" = ["E501"]

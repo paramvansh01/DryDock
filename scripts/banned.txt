@@ -1,0 +1,29 @@
+# Gate 2 — banned patterns. Grows every time the live instance rejects something.
+# Format:   ID | python regex (case-insensitive, applied to SQL with string
+#                 literals and comments stripped) | why
+# A hit FAILS the build unless a PROVEN entry in sql/DIALECT.md carries
+# "ALLOWS: <ID>" (i.e. it was run on this instance and worked).
+RETURNING        | \bRETURNING\b                 | Postgres DML RETURNING
+ON_CONFLICT      | \bON\s+CONFLICT\b             | Postgres upsert
+UPSERT           | \bUPSERT\b                    | not Exasol
+SERIAL           | \b(BIG|SMALL)?SERIAL\b        | Postgres autoincrement type
+AUTO_INCREMENT   | \bAUTO_INCREMENT\b            | MySQL; NOTE sqlglot's exasol writer EMITS this for IDENTITY
+PG_CAST          | ::                            | Postgres cast operator
+ILIKE            | \bILIKE\b                     | Postgres case-insensitive LIKE
+INFO_SCHEMA      | \binformation_schema\b        | Exasol catalogue is EXA_ALL_* / SYS
+NOW_FN           | \bnow\s*\(                    | use CURRENT_TIMESTAMP (verify)
+STRING_AGG       | \bstring_agg\s*\(             | Exasol uses GROUP_CONCAT (verify)
+GENERATE_SERIES  | \bgenerate_series\s*\(        | Postgres
+ARRAY_LITERAL    | \bARRAY\s*\[                  | Postgres arrays
+JSONB            | \bJSONB\b                     | Postgres
+CREATE_INDEX     | \bCREATE\s+(UNIQUE\s+)?INDEX\b | Exasol manages indexes itself
+VACUUM           | \bVACUUM\b                    | Postgres
+ANALYZE          | \bANALYZE\b                   | Postgres form; Exasol's is ANALYZE DATABASE ... (unverified)
+BACKTICK         | `                             | MySQL identifier quoting
+DQUOTE_IDENT     | "                             | double-quoted identifiers change case semantics; unproven
+TEXT_TYPE        | \bTEXT\b                      | not an Exasol column type; sqlglot maps it to LONG VARCHAR silently
+LIMIT_OFFSET     | \bLIMIT\s+\d+\s+OFFSET\b      | verify the exact LIMIT/OFFSET form first
+RESTART_IDENTITY | \bRESTART\s+IDENTITY\b        | Postgres TRUNCATE option
+SUBSTRING_FN     | \bSUBSTRING\s*\(              | sqlglot rewrites SUBSTR->SUBSTRING; unproven on this build
+CTE_UPDATE       | (?is)\A\s*WITH\b[^;]*?\bUPDATE\s | Exasol: [42000] syntax error, unexpected UPDATE_. Put the CTE inside the IN-subquery.
+SET_SUBQUERY     | (?is)\bSET\b[^;]*?=\s*\(\s*SELECT\b | Exasol: [42000] tables are not allowed in this context. Use MERGE INTO ... WHEN MATCHED THEN UPDATE SET.

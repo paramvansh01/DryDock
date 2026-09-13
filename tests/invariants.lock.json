@@ -1,0 +1,106 @@
+{
+  "locked_at": "2026-09-11T19:21:41",
+  "sha256": "ec0cc90f958f65edf25ba0cd101f8f422c43f60ed23ed9c4b1da35c6f04b1798",
+  "tests": {
+    "test_18_10_arbitrary_sql_runs_and_is_observed": [
+      "assert d['changed'] >= 15",
+      "assert touched.get('CITY') == 5 and touched.get('EMAIL') == 5 and (touched.get('PHONE') == 5)"
+    ],
+    "test_18_11_no_split_decoy_reaches_golden_without_a_human": [
+      "assert len(decoys) == 400",
+      "assert panel == 'UNANIMOUS_MERGE', (a_id, b_id, panel)"
+    ],
+    "test_18_13_keyless_degradation": [
+      "assert d['changed'] == 0 and d['added'] == 1 and (d['deleted'] == 1)",
+      "assert d['mode'] == 'KEYLESS'",
+      "assert d['rows'] == []"
+    ],
+    "test_18_14_reserved_names_blocked": [
+      "assert out['status'] == 'BLOCKED' and out['code'] == 'RESERVED_NAME'"
+    ],
+    "test_18_15_panel_result_is_exactly_the_vote_tally": [
+      "assert all((s > 2 for s in flagged_sizes))",
+      "assert bad == 0",
+      "assert int(db.scalar(\"SELECT COUNT(*) FROM DRYDOCK.CANDIDATES WHERE RUN_ID = 'inv-panel'\")) > 0"
+    ],
+    "test_18_16_precedent_changes_the_recorded_verdict": [
+      "assert first['precedents'] == []",
+      "assert len(second['precedents']) == 2",
+      "assert used[0] == '[]' and used[1] != '[]'"
+    ],
+    "test_18_17_tier_zero_never_merges": [
+      "assert gate.request_merge(db, bid, 1.0, 'tier 0')['decision'] != 'MERGED'"
+    ],
+    "test_18_1_isolation_after_many_arbitrary_statements": [
+      "assert golden_fp(db) == before == mat",
+      "assert len(stmts) == 50"
+    ],
+    "test_18_2_discard_totality": [
+      "assert golden_fp(db) == before",
+      "assert int(db.scalar(f\"SELECT COUNT(*) FROM DRYDOCK.BASE_HASHES WHERE BRANCH_ID = '{bid}'\")) == 0",
+      "assert int(db.scalar(f\"SELECT COUNT(*) FROM EXA_ALL_SCHEMAS WHERE SCHEMA_NAME = '{bid}'\")) == 0"
+    ],
+    "test_18_3_diff_exactness_137": [
+      "assert (d['changed'], d['added'], d['deleted']) == (137, 0, 0)",
+      "assert d['columns_touched'] == {'CITY': 137}",
+      "assert got == set(keys)"
+    ],
+    "test_18_4_agent_can_read_its_surfaces": [
+      "assert int(agent.scalar('SELECT COUNT(*) FROM GOLDEN_V.CUSTOMERS')) > 0",
+      "assert int(agent.scalar('SELECT COUNT(*) FROM SOURCE_A.CUSTOMERS')) == 36600"
+    ],
+    "test_18_4_privilege_floor": [
+      "with pytest.raises(DbError):\n    agent.run(sql)"
+    ],
+    "test_18_5_min_confidence_monotonic_through_the_database": [
+      "assert all((b >= a for a, b in zip(seen, seen[1:]))), seen"
+    ],
+    "test_18_6_hard_delete_block_unbuyable_at_tier3": [
+      "assert r['decision'] == 'BLOCKED' and 'DELETE_PCT_EXCEEDED' in r['reason']"
+    ],
+    "test_18_7_added_drift_on_an_untouched_key_does_not_block": [
+      "assert db.scalar(f\"SELECT CITY FROM GOLDEN.CUSTOMERS WHERE GOLDEN_ID = '{other}'\") == 'elsewhere'",
+      "assert r['decision'] == 'MERGED', r"
+    ],
+    "test_18_7_base_drift_on_a_touched_key_blocks": [
+      "assert r['decision'] == 'BLOCKED' and 'BASE_DRIFT' in r['reason']"
+    ],
+    "test_18_8_idempotency": [
+      "assert a['replayed'] is False and b['replayed'] is True",
+      "assert b['merge_id'] == a['merge_id']",
+      "assert golden_fp(db) == fp_after_first",
+      "assert int(db.scalar(\"SELECT COUNT(*) FROM GOLDEN.CUSTOMERS WHERE CITY = 'idem'\")) == 5"
+    ],
+    "test_18_9_unmerge_is_lifo": [
+      "assert m1['decision'] == m2['decision'] == 'MERGED'",
+      "assert merge.unmerge(db, m1['merge_id'])['fingerprint_match'] is True",
+      "assert merge.unmerge(db, m2['merge_id'])['fingerprint_match'] is True",
+      "assert refused['ok'] is False and refused['code'] == 'UNMERGE_SUPERSEDED'"
+    ],
+    "test_loaded_counts": [
+      "assert int(db.scalar('SELECT COUNT(*) FROM BENCH.GOLDEN_CLEAN')) == 36600",
+      "assert int(db.scalar('SELECT COUNT(*) FROM BENCH.TRUE_DUPS')) == 600",
+      "assert int(db.scalar('SELECT COUNT(*) FROM BENCH.TRUE_PAIRS WHERE IS_DECOY')) == 400",
+      "assert int(db.scalar('SELECT COUNT(*) FROM BENCH.TRUE_PAIRS WHERE IS_MATCH')) == 28000",
+      "assert int(db.scalar('SELECT COUNT(*) FROM SOURCE_A.CUSTOMERS')) == 36600",
+      "assert int(db.scalar('SELECT COUNT(*) FROM SOURCE_B.CLIENTS')) == 32400"
+    ],
+    "test_phase2_exit_update_in_branch_leaves_golden_byte_identical": [
+      "assert golden_fp(db) == before",
+      "assert out['rows_affected'] > 0"
+    ],
+    "test_phase4_exit_and_18_12_row_level_exclusion_per_row": [
+      "assert (out['rows_applied'], out['rows_excluded']) == (844, 3)",
+      "assert golden_fp(db) == base_fp",
+      "assert golden_fp(db) == pre == base",
+      "assert len(now) == len(original)",
+      "assert now[k] == branch_city[k] and now[k] != original[k], k",
+      "assert now[k] == original[k], k",
+      "assert out['decision'] == 'MERGED'",
+      "assert u['fingerprint_match'] is True"
+    ],
+    "test_reset_under_ten_seconds": [
+      "assert reset(db)['seconds'] < 10"
+    ]
+  }
+}

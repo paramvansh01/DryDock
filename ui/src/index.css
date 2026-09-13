@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Light theme matching the reconciliation mock-ups. Token names are kept from the first
+   build so every existing panel re-skins without code changes. */
+@theme {
+  --color-ink: #f4f6fa;      /* page background */
+  --color-hull: #ffffff;     /* cards */
+  --color-deck: #f1f4f9;     /* subtle fills, table header */
+  --color-rule: #e4e8ef;     /* borders */
+  --color-fog: #0f172a;      /* primary text */
+  --color-mist: #64748b;     /* secondary text */
+  --color-tide: #2563eb;     /* primary blue */
+  --color-navy: #1e3a5f;     /* primary action (Start New Run) */
+  --color-brass: #d97706;    /* review / warning */
+  --color-flare: #dc2626;    /* reject / danger */
+  --color-kelp: #16a34a;     /* match / success */
+  --color-sky: #7c3aed;      /* SOURCE_B accent */
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+}
+
+html, body, #root { height: 100%; }
+body { font-family: var(--font-sans); font-size: 14px; -webkit-font-smoothing: antialiased; background: var(--color-ink); color: var(--color-fog); }
+.num { font-variant-numeric: tabular-nums; }
+.scroll-thin::-webkit-scrollbar { width: 8px; height: 8px; }
+.scroll-thin::-webkit-scrollbar-thumb { background: var(--color-rule); border-radius: 4px; }
+.card { background: var(--color-hull); border: 1px solid var(--color-rule); border-radius: 12px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+
+/* ------------------------------------------------------------------ Live System view
+   A dot travels a connector's exact path (CSS offset-path) only when a real event arrives. */
+@keyframes dd-travel {
+  0%   { offset-distance: 0%;   opacity: 0; }
+  10%  { opacity: 1; }
+  86%  { opacity: 1; }
+  100% { offset-distance: 100%; opacity: 0; }
+}
+.dd-dot {
+  position: absolute; left: 0; top: 0; border-radius: 9999px;
+  offset-rotate: 0deg; offset-anchor: center; pointer-events: none;
+  background: var(--c);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 16%, transparent), 0 0 10px color-mix(in srgb, var(--c) 40%, transparent);
+  animation: dd-travel var(--dur) cubic-bezier(.45, .05, .3, 1) var(--delay) both;
+}
+@keyframes dd-ring { 0% { opacity: .55; transform: scale(1); } 100% { opacity: 0; transform: scale(1.06); } }
+.dd-ring { position: absolute; inset: -5px; border-radius: 16px; border: 2px solid var(--c); pointer-events: none;
+  animation: dd-ring 1.4s ease-out forwards; }
+@keyframes dd-think { 0%, 100% { opacity: .35; } 50% { opacity: 1; } }
+.dd-think { animation: dd-think 1.2s ease-in-out infinite; }
+.dd-grid { background-image: radial-gradient(circle at 1px 1px, #dfe5ee 1px, transparent 0); background-size: 22px 22px; }
+@media (prefers-reduced-motion: reduce) { .dd-dot { display: none; } .dd-ring, .dd-think { animation: none; } }
+@keyframes dd-flash { 0% { background-color: color-mix(in srgb, var(--color-tide) 10%, transparent); } 100% { background-color: transparent; } }
+.dd-flash { animation: dd-flash 1.6s ease-out; }

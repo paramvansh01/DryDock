@@ -1,0 +1,80 @@
+-- Run as the ADMIN identity (bench/generate.py does this before loading data).
+-- The admin owns the inputs and the ground truth, so DRYDOCK_SVC can read them
+-- but never write them, and DRYDOCK_AGENT can never see BENCH at all.
+
+CREATE SCHEMA IF NOT EXISTS SOURCE_A;
+CREATE SCHEMA IF NOT EXISTS SOURCE_B;
+CREATE SCHEMA IF NOT EXISTS BENCH;
+
+-- System of record. DATE_OF_BIRTH matters: the FAMILY_SAME_ADDRESS decoys differ only by DOB.
+CREATE OR REPLACE TABLE SOURCE_A.CUSTOMERS (
+    CUST_ID       VARCHAR(64),
+    FULL_NAME     VARCHAR(200),
+    EMAIL         VARCHAR(200),
+    PHONE         VARCHAR(50),
+    ADDR_LINE     VARCHAR(300),
+    CITY          VARCHAR(100),
+    POSTCODE      VARCHAR(20),
+    COUNTRY       VARCHAR(60),
+    DATE_OF_BIRTH DATE,
+    CREATED_AT    TIMESTAMP
+);
+
+-- Second system: different names, split name, ISO country, DOB as text.
+CREATE OR REPLACE TABLE SOURCE_B.CLIENTS (
+    CLIENT_REF VARCHAR(64),
+    FIRST_NAME VARCHAR(100),
+    LAST_NAME  VARCHAR(100),
+    EMAIL_ADDR VARCHAR(200),
+    MOBILE     VARCHAR(50),
+    STREET     VARCHAR(300),
+    TOWN       VARCHAR(100),
+    ZIP        VARCHAR(20),
+    NATION     VARCHAR(60),
+    DOB        VARCHAR(10),        -- 'DD/MM/YYYY'
+    LAST_SEEN  TIMESTAMP
+);
+
+CREATE OR REPLACE TABLE BENCH.TRUE_PAIRS (
+    A_ID       VARCHAR(64),
+    B_ID       VARCHAR(64),
+    IS_MATCH   BOOLEAN,
+    IS_DECOY   BOOLEAN,
+    DECOY_KIND VARCHAR(64)
+);
+
+-- A<->A duplicates inside SOURCE_A: deduplication has its own ground truth.
+CREATE OR REPLACE TABLE BENCH.TRUE_DUPS (
+    A_ID      VARCHAR(64),         -- the original record
+    A_DUP_ID  VARCHAR(64)          -- the typo'd second record
+);
+
+CREATE OR REPLACE TABLE BENCH.GOLDEN_CLEAN (
+    GOLDEN_ID     VARCHAR(64),
+    FULL_NAME     VARCHAR(200),
+    EMAIL         VARCHAR(200),
+    PHONE         VARCHAR(50),
+    ADDR_LINE     VARCHAR(300),
+    CITY          VARCHAR(100),
+    POSTCODE      VARCHAR(20),
+    COUNTRY       VARCHAR(60),
+    DATE_OF_BIRTH DATE,
+    SOURCE_A_REF  VARCHAR(64),
+    SOURCE_B_REF  VARCHAR(64),
+    MERGED_A_REFS VARCHAR(2000),
+    MERGED_AT     TIMESTAMP,
+    SURVIVORSHIP  VARCHAR(2000)
+);
+
+CREATE OR REPLACE TABLE BENCH.GENERATION (
+    SEED        DECIMAL(18,0),
+    GENERATED_AT TIMESTAMP,
+    COUNTS      VARCHAR(4000)
+);
+
+GRANT SELECT ON SCHEMA SOURCE_A TO DRYDOCK_SVC;
+GRANT SELECT ON SCHEMA SOURCE_B TO DRYDOCK_SVC;
+GRANT SELECT ON SCHEMA BENCH TO DRYDOCK_SVC;      -- scoring + reset only; never on the agent path
+GRANT SELECT ON SCHEMA SOURCE_A TO DRYDOCK_AGENT;
+GRANT SELECT ON SCHEMA SOURCE_B TO DRYDOCK_AGENT;
+-- No grant on BENCH to DRYDOCK_AGENT. Ever.
