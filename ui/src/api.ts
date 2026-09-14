@@ -19,6 +19,15 @@ export const api = {
   readjudicate: (pairId: number) => call("POST", `/pairs/${pairId}/readjudicate`),
   deletePrecedent: (id: number) => call("DELETE", `/precedents/${id}`),
   snapshot: () => call("POST", "/system/snapshot"),
+  // Read-only page of a table, straight from Exasol. The browser sends no SQL: it names a
+  // table, a page, a sort column and a filter, and the orchestrator composes the SELECT.
+  browse: (p: { schema: string; table: string; limit: number; offset: number; order?: string | null;
+                dir?: string; q?: string | null }) =>
+    call("GET", `/db/rows?${new URLSearchParams({
+      schema: p.schema, table: p.table, limit: String(p.limit), offset: String(p.offset),
+      ...(p.order ? { order: p.order, dir: p.dir ?? "ASC" } : {}),
+      ...(p.q ? { q: p.q } : {}),
+    })}`) as Promise<import("./types").Page>,
   startRun: (body: { run_id: string; mode: string; gate_enabled: boolean; tier: number; plan_from_run?: string | null }) =>
     call("POST", "/runs", body),
 };

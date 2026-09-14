@@ -7,7 +7,8 @@ import { kpis, steps } from "./derive";
 import { initialState, reduce } from "./reducer";
 import { type Source, connect } from "./stream";
 import type { DrydockEvent } from "./types";
-import { DatabaseView, DiffView, GateView, RunsView } from "./views/Other";
+import { DatabaseView } from "./views/Database";
+import { DiffView, GateView, RunsView } from "./views/Other";
 import { Overview } from "./views/Overview";
 import { Reconcile } from "./views/Reconcile";
 import { SystemView } from "./views/System";
@@ -113,7 +114,7 @@ export default function App() {
         {tab === "diff" && <DiffView s={state} branch={branch} canAct={canAct} replay={replay} onFocus={focus} />}
         {tab === "gate" && <GateView s={state} branch={branch?.gate ? branch : Object.values(state.branches).find((b) => b.status === "PENDING") ?? branch} canAct={canAct} onFocus={focus} />}
         {tab === "runs" && <RunsView s={state} onFocus={openDiff} />}
-        {tab === "database" && <DatabaseView s={state} />}
+        {tab === "database" && <DatabaseView s={state} replay={replay} />}
         {tab === "system" && <SystemView s={state} canAct={canAct} />}
       </main>
 

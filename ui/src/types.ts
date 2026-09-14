@@ -136,6 +136,18 @@ export interface Snapshot {
             planner_model: string; adjudicator_model: string; adjudicator_rung: string; mcp_row_limit: number; mcp_schema_pattern: string };
 }
 
+/** GET /db/rows: one page of a table, read from Exasol when the Database view asked for it.
+    Not part of the event stream — it is a read, like the reviewer's other REST calls. */
+export interface Page {
+  schema: string; table: string;
+  columns: [string, string][];          // [name, type] in ordinal order, as Exasol reports them
+  rows: (string | number | boolean | null)[][];
+  total: number; limit: number; offset: number;
+  order: string; order_implicit: boolean; dir: "ASC" | "DESC";
+  q: string | null; searched: string[];  // the character columns the filter actually searched
+  sql: string; db_time: string; ms: number;
+}
+
 export interface State {
   runs: Record<string, RunInfo>;
   activeRun: string | null;

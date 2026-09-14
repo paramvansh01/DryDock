@@ -21,7 +21,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import branch, diff, er, events, gate, merge, precedent, system
+from . import branch, browse, diff, er, events, gate, merge, precedent, system
 from .config import REJECT_CODES, ROOT, SETTINGS, NotVerified
 from .db import DbError, get, lit
 
@@ -392,6 +392,16 @@ def system_snapshot():
     """Re-read Exasol now. The result arrives on the event stream like everything else."""
     p = _snapshot_now("refresh")["payload"]
     return {"ok": True, "db_time": p["db_time"], "session": p["session"], "ms": p["ms"]}
+
+
+# ------------------------------------------------------------------ read-only database browser (Database view)
+
+@app.get("/db/rows")
+def db_rows(schema: str, table: str, limit: int = browse.DEFAULT_LIMIT, offset: int = 0,
+            order: str | None = None, dir: str = "ASC", q: str | None = None):
+    """One page of a browsable table, read from Exasol now. SELECT only, composed by
+    drydock/browse.py from validated identifiers — the browser never sends SQL."""
+    return browse.rows(_db(), schema, table, limit=limit, offset=offset, order=order, direction=dir, q=q)
 
 
 @app.get("/health")

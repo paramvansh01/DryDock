@@ -280,7 +280,7 @@ at the top.
 | **Diff Viewer** | the exact rows a branch would change; tick or untick each one |
 | **Merge Gate** | requests waiting for you: **MERGE**, **REJECT** (with a reason, which becomes a precedent) or **DISCARD** |
 | **Runs** | the scoreboard: precision, recall, F1 and the gate's safety score |
-| **Database** | GOLDEN's row count and fingerprint history |
+| **Database** | browse the instance: every schema and table, their columns and keys, and their rows a page at a time (read-only), plus GOLDEN's fingerprint history |
 | **Live System** | the architecture, live, with what Exasol reports right now; **Refresh from Exasol** re-reads it |
 
 ### Next time
@@ -359,6 +359,7 @@ drydock/            the governed write path
   orchestrator.py   FastAPI app: web interface, live events, reviewer actions
   mcp_server.py     the Drydock MCP server (the agent's write path)
   system.py         live Exasol metadata for the Live System view
+  browse.py         the Database view's read-only table browser (SELECT only)
   db.py, lintguard.py, catalogue.py   database access with a built-in SQL dialect firewall
 agent/              the Gemini planner loop and the scripted playbook
 bench/              synthetic data generator, source schemas and scoring

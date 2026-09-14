@@ -1,11 +1,11 @@
-import { Database, GitBranch, ShieldCheck } from "lucide-react";
+import { GitBranch, ShieldCheck } from "lucide-react";
 import { Diff } from "../panels/Diff";
 import { Gate } from "../panels/Gate";
 import { Narrative } from "../panels/Narrative";
 import { Score } from "../panels/Score";
 import { Strip } from "../panels/Strip";
 import type { Branch, State } from "../types";
-import { fmt, short, statusTone } from "../ui";
+import { statusTone } from "../ui";
 
 function Title({ icon: Icon, title, sub }: { icon: React.ElementType; title: string; sub: string }) {
   return (
@@ -98,51 +98,6 @@ export function RunsView({ s, onFocus }: { s: State; onFocus: (id: string) => vo
           <Score s={s} />
         </div>
         <div className="h-[calc(100vh-240px)] min-h-[480px]"><Narrative s={s} onFocus={onFocus} /></div>
-      </div>
-    </div>
-  );
-}
-
-export function DatabaseView({ s }: { s: State }) {
-  const mats = s.order.map((id) => s.branches[id]).filter((b) => b.materialised);
-  return (
-    <div className="space-y-4">
-      <Title icon={Database} title="Database" sub="What the event stream reports about Exasol: GOLDEN's fingerprint history and every branch copy." />
-      <div className="grid grid-cols-2 gap-4">
-        <section className="card px-5 py-4">
-          <div className="text-[13px] font-semibold text-fog">GOLDEN.CUSTOMERS</div>
-          <div className="mt-2 flex items-baseline gap-4">
-            <span className="num text-3xl font-bold text-fog">{fmt(s.golden.rows)}</span><span className="text-mist">rows</span>
-            <span className="font-mono text-[13px] text-fog" title={s.golden.fingerprint ?? ""}>fp {short(s.golden.fingerprint)}</span>
-          </div>
-          <table className="mt-4 w-full text-[12.5px]">
-            <thead className="text-left text-mist"><tr><th className="py-1 font-medium">Time</th><th className="font-medium">Fingerprint</th><th className="font-medium">Cause</th></tr></thead>
-            <tbody>
-              {s.golden.history.length === 0 && <tr><td colSpan={3} className="py-3 text-mist">No fingerprint observed yet.</td></tr>}
-              {[...s.golden.history].reverse().map((h, i) => (
-                <tr key={i} className="border-t border-rule"><td className="py-1.5">{new Date(h.ts).toLocaleTimeString("en-GB")}</td>
-                  <td className="font-mono">{short(h.fingerprint)}</td><td>{h.cause}</td></tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-        <section className="card px-5 py-4">
-          <div className="text-[13px] font-semibold text-fog">Branch copies (copy-on-write)</div>
-          <table className="mt-3 w-full text-[12.5px]">
-            <thead className="text-left text-mist"><tr><th className="py-1 font-medium">Branch</th><th className="font-medium">Table</th>
-              <th className="text-right font-medium">Rows</th><th className="text-right font-medium">Copy</th><th className="pl-3 font-medium">Status</th></tr></thead>
-            <tbody>
-              {mats.length === 0 && <tr><td colSpan={5} className="py-3 text-mist">No table has been copied into a branch yet.</td></tr>}
-              {mats.map((b) => (
-                <tr key={b.id} className="border-t border-rule">
-                  <td className="py-1.5 font-mono">{b.id}</td><td>{b.materialised!.table}</td>
-                  <td className="num text-right">{fmt(b.materialised!.rows)}</td><td className="num text-right">{Math.round(b.materialised!.copy_ms)} ms</td>
-                  <td className="pl-3">{b.status}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
       </div>
     </div>
   );

@@ -15,7 +15,7 @@ export default defineConfig(({ command }) => ({
     proxy: {
       "/ws": { target: api.replace("http", "ws"), ws: true },
       "/runs": api, "/merges": api, "/branches": api, "/precedents": api, "/pairs": api,
-      "/health": api, "/replays": api,
+      "/health": api, "/replays": api, "/db": api, "/system": api,
     },
   },
   test: { environment: "node" },
