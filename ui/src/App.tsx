@@ -118,7 +118,7 @@ export default function App() {
       </main>
 
       <footer className="mx-auto flex max-w-[1400px] items-center justify-between border-t border-rule px-6 py-4 text-[12px] text-mist">
-        <span><span className="font-semibold text-fog">DRYDOCK</span> v0.1.0 · Exasol AI + Data Challenge 2026</span>
+        <span><span className="font-semibold text-fog">DRYDOCK</span> v0.1.0</span>
         <span>Governed changes. Observed impact.</span>
       </footer>
 
