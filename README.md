@@ -17,7 +17,7 @@ exactly**.
 
 | | |
 |---|---|
-| **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](Drydock Pitch Deck.pdf) |
+| **Pitch deck** | [Drydock Pitch Deck.pdf](Drydock Pitch Deck.pdf) |
 | **Source code** | [Project structure](#project-structure) |
 
 ---
