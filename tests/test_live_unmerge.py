@@ -28,9 +28,11 @@ def db():
     from drydock import er, events
     from drydock.db import Db
     from reset import reset
+    from drydock import dataset
     events.clear_sinks()
     er.install_hooks()
     d = Db("svc")
+    assert dataset.active(d).name == "demo", "the live tests need the demo data: run ./scripts/reset.sh --demo first"
     reset(d)
     return d
 
@@ -60,7 +62,7 @@ def test_unmerge_follows_application_order_not_request_order(db):
     n = int(db.scalar("SELECT COUNT(*) FROM GOLDEN.CUSTOMERS")) * 12 // 1000      # 1.2%: over tier 2's 1%, under 5%
     b1 = branch_with(db, f"DELETE FROM GOLDEN.CUSTOMERS WHERE GOLDEN_ID IN ({in_list(keys(db, n))})")
     m1 = gate.request_merge(db, b1, 0.99, "requested first")
-    b2 = branch_with(db, f"DELETE FROM GOLDEN.CUSTOMERS WHERE GOLDEN_ID IN ({in_list(keys(db, n, 5000))})")
+    b2 = branch_with(db, f"DELETE FROM GOLDEN.CUSTOMERS WHERE GOLDEN_ID IN ({in_list(keys(db, n, 2 * n))})")
     m2 = gate.request_merge(db, b2, 0.99, "requested second")
     assert m1["decision"] == m2["decision"] == "PENDING"
     fp0 = fp(db)

@@ -272,6 +272,7 @@ export function explainReason(reason: string | null | undefined): string {
     case "STAGING_FINGERPRINT_MISMATCH": return "The staged result did not match what was reviewed, so nothing was written.";
     case "UNACKNOWLEDGED_ERRORS": return "Some statements in this copy failed. It cannot merge until that is dealt with.";
     case "FORBIDDEN_TABLE": return "This copy touched a table Drydock never merges.";
+    case "MULTI_TABLE": return "This copy changes more than one table. Drydock merges one table at a time, so each can be checked and undone exactly.";
     default:
       if (code.startsWith("TIER_")) return "This tier never merges on its own: everything waits for a person.";
       if (code.startsWith("BRANCH_")) return "This copy is no longer open, so it cannot be merged.";

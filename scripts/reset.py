@@ -2,6 +2,7 @@
 
     ./scripts/reset.sh                   # keep PRECEDENTS (case law persists across takes)
     ./scripts/reset.sh --wipe-precedents
+    ./scripts/reset.sh --demo            # switch to the demo data first (the live tests need it)
 
 Drops every BR_* schema, every GOLDEN table (including __ARCH_/__NEW_/__UNDONE_),
 every ER_WORK table; recreates GOLDEN.CUSTOMERS from the active dataset's starting
@@ -43,8 +44,12 @@ def reset(db: Db, wipe_precedents: bool = False) -> dict:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--wipe-precedents", action="store_true")
+    ap.add_argument("--demo", action="store_true", help="make the demo data the active dataset, then reset")
     a = ap.parse_args()
-    out = reset(Db("svc"), a.wipe_precedents)
+    db = Db("svc")
+    if a.demo:
+        db.run("DELETE FROM DRYDOCK.DATASET")        # no row = the demo (drydock/dataset.py)
+    out = reset(db, a.wipe_precedents or a.demo)
     print(out)
     if out["seconds"] > 10:
         print("WARNING: reset took longer than the 10s target", file=sys.stderr)
