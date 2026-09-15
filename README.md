@@ -6,6 +6,12 @@
 
 # Drydock
 
+<p align="center">
+  <a href="https://drive.google.com/file/d/1YiVW0ad95-Zgrk_QQWo7Z6H26xkKM-1h/view?usp=sharing">
+    <img src="https://img.shields.io/badge/▶%20Demo%20Video-Watch%20Now-red?style=for-the-badge&logo=google-drive" alt="Watch Demo Video">
+  </a>
+</p>
+
 **Safe writes for AI agents on Exasol.**
 
 AI agents can now reach databases through MCP. Reading is easy; writing is where it gets dangerous. Drydock is a
@@ -20,7 +26,7 @@ through every screen.
 
 | | |
 |---|---|
-| **Demo video** | [▶ Watch the demo](DEMO%20video.mp4) |
+| **Demo video** | [▶ Watch the demo](https://drive.google.com/file/d/1YiVW0ad95-Zgrk_QQWo7Z6H26xkKM-1h/view?usp=sharing) |
 | **Pitch deck** | [Drydock Pitch Deck.pdf](Drydock%20Pitch%20Deck.pdf) |
 | **Source code** | [Project structure](#project-structure) |
 
