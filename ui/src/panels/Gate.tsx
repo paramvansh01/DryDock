@@ -38,7 +38,8 @@ export function Gate({ branch, canAct }: { branch: Branch | null; canAct: boolea
   }
   const approvedCount = branch.approvedCount ?? (branch.diff ? branch.diff.rows_total - Object.values(branch.approvals).filter((v) => !v).length : total);
   const deselected = total - approvedCount;
-  const tone = branch.status === "MERGED" || g.decision === "MERGE" ? "bg-kelp" : g.decision === "PENDING" ? "bg-brass" : "bg-flare";
+  const undone = branch.status === "UNMERGED";
+  const tone = undone ? "bg-mist" : branch.status === "MERGED" || g.decision === "MERGE" ? "bg-kelp" : g.decision === "PENDING" ? "bg-brass" : "bg-flare";
   const act = async (f: () => Promise<unknown>) => {
     setBusy(true);
     try { await f(); } catch (e) { reportError(e); }
@@ -54,9 +55,9 @@ export function Gate({ branch, canAct }: { branch: Branch | null; canAct: boolea
         <span className="num">conf {(g.limits.confidence ?? 0).toFixed(2)}</span>
         <span className="num">risk {g.risk.toFixed(1)}</span>
         <span className="num text-mist">tier {g.tier} (max risk {g.limits.max_risk}, max rows {fmt(g.limits.max_changed)})</span>
-        {g.rows_needing_review > 0 && <Chip tone="brass">{fmt(g.rows_needing_review)} need review</Chip>}
-        <span className="ml-auto"><Chip tone={g.decision === "MERGE" ? "kelp" : g.decision === "PENDING" ? "brass" : "flare"}>
-          {branch.status === "MERGED" ? "MERGED" : g.decision}</Chip></span>
+        {pending && g.rows_needing_review > 0 && <Chip tone="brass">{fmt(g.rows_needing_review)} need review</Chip>}
+        <span className="ml-auto"><Chip tone={undone ? "mist" : branch.status === "MERGED" || g.decision === "MERGE" ? "kelp" : g.decision === "PENDING" ? "brass" : "flare"}>
+          {undone ? "MERGED, THEN UNDONE" : branch.status === "MERGED" ? "MERGED" : g.decision}</Chip></span>
       </div>
       <div className="relative h-5 overflow-visible rounded bg-deck">
         {/* The resting state is static (never depends on an animation finishing); the fill-and-bounce

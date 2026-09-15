@@ -69,12 +69,12 @@ function Signals({ sig }: { sig: Pair["signals"] }) {
 }
 
 function PairCard({ card, pair, mapping }: { card: Card; pair: Pair; mapping?: Record<string, string> }) {
-  const aName = pair.kind === "AA" ? "SOURCE_A (dup)" : "SOURCE_B";
+  const aName = pair.kind === "AA" ? "System A (duplicate)" : "System B";
   return (
     <div className="space-y-2">
       <div className="grid grid-cols-[72px_1fr_1fr] gap-x-3 gap-y-0.5 text-[12.5px]">
         <div />
-        <div className="text-[10px] uppercase tracking-wider text-mist">SOURCE_A · {pair.a_id}</div>
+        <div className="text-[10px] uppercase tracking-wider text-mist">System A · {pair.a_id}</div>
         <div className="text-[10px] uppercase tracking-wider text-mist">{aName} · {pair.b_id}</div>
         {FIELDS.map((f) => {
           const av = aValue(f, pair.a);

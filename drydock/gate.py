@@ -138,12 +138,19 @@ def run_settings(db: Db, run_id: str | None) -> tuple[int, bool, float]:
     return int(r[0]["TIER"]), bool(r[0]["GATE_ENABLED"]), float(r[0]["MIN_CONFIDENCE"] or 0)
 
 
+def table_blocks(tables: list[dict]) -> list[str]:
+    """One GOLDEN table per merge. The swap, the recorded fingerprints, the unmerge check and crash recovery
+    are all per table, and are exercised on one; a change that touches two tables is refused, not half-handled.
+    (GOLDEN holds one table today and branch SQL cannot create another, so this is a guarantee, not a limit.)"""
+    return ["MULTI_TABLE"] if len({t["table"] for t in tables}) > 1 else []
+
+
 def hard_blocks(db: Db, branch_id: str, diff: dict) -> list[str]:
     """Observed facts that no tier, confidence or reviewer can override."""
     from .hashing import columns, signature
 
     bid = ident(branch_id)
-    out = []
+    out = table_blocks(diff.get("tables", []))
     br = db.dicts(f"SELECT STATUS FROM DRYDOCK.BRANCHES WHERE BRANCH_ID = {lit(bid)}")
     if not br or br[0]["STATUS"] != "OPEN":
         out.append("BRANCH_NOT_OPEN")

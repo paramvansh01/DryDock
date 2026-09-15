@@ -16,6 +16,8 @@ apply(): stage-then-swap with row-level approval.
 unmerge(): two renames back, then fingerprint == PRE_MERGE_FINGERPRINT. LIFO per table, where
            "last" means last APPLIED (RESOLVED_AT), and only while GOLDEN still fingerprints as the
            merge left it.
+One table per merge (gate.table_blocks refuses more): the swap, PRE/POST_MERGE_FINGERPRINT, the unmerge
+checks and recover() are all per table.
 reseed(): replace GOLDEN with a dataset's starting snapshot (a new dataset, or a reset).
 
 The staging CTAS is generated from the catalogue; every statement passes lintguard.clean().
@@ -217,9 +219,13 @@ def unmerge(db: Db, merge_id: int, by: str = "human") -> dict:
             if later is not None:
                 return {"ok": False, "code": "UNMERGE_SUPERSEDED", "superseded_by": int(later),
                         "message": f"merge {later} changed {GOLDEN}.{t} after this one; unmerge that first (LIFO)"}
+        # A merge touches one table (gate.table_blocks); PRE/POST_MERGE_FINGERPRINT describe that table.
+        if len(tables) != 1:
+            return {"ok": False, "code": "MULTI_TABLE_MERGE",
+                    "message": f"merge {mid} lists {len(tables)} tables; only one-table merges can be undone exactly"}
         # Second guard: the table must still be exactly what this merge produced. It catches any writer
         # the MERGES ledger does not know about; renaming the archive back would silently discard its work.
-        if len(tables) == 1 and m["POST_MERGE_FINGERPRINT"]:
+        if m["POST_MERGE_FINGERPRINT"]:
             now = table_fingerprint(db, GOLDEN, tables[0])
             if now.hex != m["POST_MERGE_FINGERPRINT"]:
                 return {"ok": False, "code": "GOLDEN_CHANGED_SINCE_MERGE",
@@ -276,6 +282,14 @@ def reseed(db: Db, seed: str) -> Fingerprint:
     return table_fingerprint(db, GOLDEN, "CUSTOMERS")
 
 
+def swap_table(present: set[str], merge_id: int) -> str | None:
+    """Which GOLDEN table an interrupted merge was swapping, read from the working copies it left behind
+    (T__NEW_<id>, T__ARCH_<id>). A merge touches one table (gate.table_blocks), so there is at most one."""
+    found = {n[: -len(suffix)] for n in present for suffix in (f"__NEW_{merge_id}", f"__ARCH_{merge_id}")
+             if n.endswith(suffix)}
+    return found.pop() if len(found) == 1 else None
+
+
 def recover(db: Db) -> list[str]:
     """Crash recovery for the non-transactional swap window (V4 FAIL). Promote
     whichever of T / T__NEW_ / T__ARCH_ is consistent; never guess silently."""
@@ -283,7 +297,7 @@ def recover(db: Db) -> list[str]:
     for m in db.dicts("SELECT MERGE_ID, BRANCH_ID, SWAP_STAGE FROM DRYDOCK.MERGES WHERE DECISION = 'APPLYING'"):
         mid = int(m["MERGE_ID"])
         present = {r[0] for r in db.rows(f"SELECT TABLE_NAME FROM EXA_ALL_TABLES WHERE TABLE_SCHEMA = {lit(GOLDEN)}")}
-        t = "CUSTOMERS"
+        t = swap_table(present, mid) or "CUSTOMERS"
         new, arch = f"{t}__NEW_{mid}", f"{t}__ARCH_{mid}"
         if t not in present and new in present and arch in present:
             db.run(rename_sql(GOLDEN, new, t))

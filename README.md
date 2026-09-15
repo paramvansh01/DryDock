@@ -40,7 +40,7 @@ effect**, enforced by the database itself.
 | **Undo** | restore a backup, or write reverse SQL by hand | exact: the archived table is renamed back and its fingerprint proves byte-for-byte equality; changes are undone newest-first, so production only ever returns to a state that existed |
 | **Who enforces the limits** | the agent's instructions | the database: the agent's user holds no write grant anywhere, and exactly one module writes production |
 | **Deciding what needs a person** | fixed rules, or review everything | each change gets a risk price (rows × uncertainty × kind of change, deletes weighing most), checked against per-tier limits and a hard delete cap; the confidence bar rises each time a reviewer rejects a change as a wrong match, too broad or short of evidence |
-| **Where the AI fits** | it makes the decision | it only advises on the pairs the SQL matchers disagree on, sees a comparison summary (never a name, email, phone, address or date) and never writes |
+| **Where the AI fits** | it makes the decision | Exasol makes the decisions in SQL (three matchers settle about 98% of pairs); Gemini only advises on the pairs they disagree on, sees a comparison summary (never a name, email, phone, address or date) and never writes |
 | **What it assumes about the database** | untested | every database behaviour the design relies on (transactional DDL, rename rules, hashing) is checked on the live instance and signed; Drydock refuses to run without that proof |
 | **Afterwards** | logs, if anyone kept them | a downloadable audit log (who decided what, when, why, fingerprints before and after), the exact change set for sign-off, and each customer's lineage: which source record every field came from |
 
@@ -53,8 +53,9 @@ Three ideas carry it:
 3. **Every decision becomes evidence.** Approvals, rejections and undos are recorded under the reviewer's name, and
    reviewers' decisions become case law the AI adjudicator is shown the next time a similar pair comes up.
 
-The write path is not specific to customers: it governs any table in the `GOLDEN` schema (keyed tables get row-level
-review, keyless ones whole-table). Customer reconciliation is the workload that demonstrates it.
+The write path is written for the `GOLDEN` schema rather than for customers, and merges one table at a time: a change
+that touches two tables is refused. Keyed tables get row-level review, keyless ones whole-table. It has been exercised
+on `GOLDEN.CUSTOMERS`, the table the demo uses; customer reconciliation is the workload that demonstrates it.
 
 ---
 
@@ -147,23 +148,29 @@ The same pipeline runs on your own two files: see [Using your own data](#using-y
 Measured on Exasol Personal 2026.2 on a laptop: a scripted run with the gate on (tier 2), then a person reviewing the
 held requests in the web interface.
 
-**The matcher** (verdicts before any person looks):
+**The contribution is the gate and the undo, not the matcher.** The demo data is synthetic, so the matcher's accuracy
+on it (at the end of this section) only shows that the pipeline is wired correctly. What carries over to any data is
+what the gate did with the proposed changes, what the undo guarantees, and how fast Exasol makes it.
 
-| | |
-|---|---|
-| Merges proposed | 27,981, of which **27,980 correct** (precision 0.99996) |
-| True matches found | 27,980 of 28,000 (recall 0.9993, F1 0.9996) |
-| Internal duplicates | 600 of 600 found, 0 wrong |
+**What the gate did with five proposed changes** (what actually reached GOLDEN):
 
-**The gate** (what actually reached GOLDEN):
-
-| Match class | Rows changed | Held for a person (split votes) | Applied after review |
+| Change | Rows changed | Held for a person (the matchers disagreed) | Applied after review |
 |---|---|---|---|
 | EXACT_EMAIL | 24,186 | 184 | 24,002 |
 | PHONE_ADDRESS | 3,174 | 10 | 3,164 |
 | FUZZY_NAME | 621 | 35 | 586 |
 | NEW_CUSTOMERS | 4,413 | 0 (merged automatically, within limits) | 4,413 |
 | INTERNAL_DEDUP | 1,200 | whole request held: it would delete 1.46% of GOLDEN, and the tier allows 1% | — |
+
+One change merged by itself because it was small and safe. In three, the rows the matchers disagreed on started
+unticked and waited for a person, while the rest merged when the person approved. One was held whole because of
+how much it would delete. With the gate on and nobody reviewing, none of the 400 planted look-alikes that the
+matchers disagreed on reaches GOLDEN; each is checked individually (live test 18.11).
+
+**What the undo guarantees.** Every merge keeps the table it replaced. Undo renames it back, then compares the
+restored table's fingerprint (an order-independent sum of per-row SHA-256 hashes) with the one taken before the
+merge (live test 18.9). Undo goes newest-applied first, and refuses if the table has changed since the merge in any
+way the merge ledger doesn't know about, so it can never silently discard later work.
 
 **Engine timings on the laptop:**
 
@@ -174,9 +181,15 @@ held requests in the web interface.
 | Swap the merged table in | whole table | 15–35 ms |
 | Discard a branch | whole branch | about 35 ms |
 
-**Tests:** 38 live tests against Exasol (plus two new unmerge-order tests, `tests/test_live_unmerge.py`, awaiting
-their first live run), 348 offline Python tests and 28 web-interface tests.
-`scripts/probe_all.py` runs every SQL statement the product can issue against the instance (57 statements, 0 errors).
+**The matcher, as a sanity check.** `bench/generate.py` writes both systems and a sealed answer key from a fixed seed,
+with 400 planted look-alikes (fathers and sons, spouses sharing a phone, people and their companies). Scored against
+that key, the matcher proposed 27,981 merges, of which 27,980 were correct, and found 27,980 of the 28,000 true
+matches and all 600 internal duplicates. We generated this data ourselves, so treat these numbers as evidence that
+the pipeline works, not as a claim about accuracy on real customer data, which depends on the data. Drydock's answer to
+an imperfect matcher is the gate: uncertain pairs wait for a person whatever the matcher's score.
+
+**Tests:** 38 live tests against Exasol, 352 offline Python tests and 28 web-interface tests. `scripts/probe_all.py`
+runs every SQL statement the product can issue against the instance and records each outcome.
 
 ---
 
@@ -361,8 +374,8 @@ No files to hand? Download the two sample files on the same screen. **Use the de
 any time.
 
 What's different with your own data: there is no answer key, so runs are not scored, and your review is the check.
-Agent mode (Gemini planning) currently works on the demo data only; scripted mode runs the same matching, gate and
-review on yours.
+Agent mode, where Gemini plans the steps, runs on the demo data; your own files use scripted mode, which runs the
+same matching, gate and review.
 
 ---
 
@@ -388,12 +401,15 @@ approve changes, so share it like a password, and serve Drydock over HTTPS.
 ```bash
 uv run pytest                                   # offline tests: no database needed
 cd ui && npm test && cd ..                      # web interface tests
-DRYDOCK_LIVE=1 uv run pytest tests/test_invariants.py -v   # live tests against your Exasol (resets GOLDEN)
+./scripts/reset.sh --demo                       # the live tests run on the demo data: switch to it first
+DRYDOCK_LIVE=1 uv run pytest tests/test_invariants.py tests/test_live_unmerge.py -v   # live, against your Exasol
 uv run python scripts/probe_all.py              # runs every product SQL statement against Exasol
 uv run python scripts/dialect_lint.py           # checks all SQL for non-Exasol syntax
 ```
 
-The live tests and `probe_all.py` need the secret word from step 5 in the same terminal.
+The live tests and `probe_all.py` need the secret word from step 5 in the same terminal. The live tests reset
+GOLDEN, and they count on the demo data being active, which is why `reset.sh --demo` comes first. Stop Drydock
+(Ctrl+C) while they run.
 
 ---
 
@@ -444,7 +460,8 @@ drydock/            the governed write path
   gate.py           risk gate and hard blocks
   merge.py          the only code that writes GOLDEN: stage, verify, swap, unmerge
   er.py             entity resolution: blocking, scoring, the three-matcher panel, clustering
-  adjudicate.py     Gemini adjudication of split pairs (and the optional in-database model)
+  adjudicate.py     Gemini adjudication of split pairs; an in-database model path also exists, but needs a script
+                    language container, which this Exasol Personal install does not have (verify.py check R0)
   precedent.py      reviewer decisions reused as precedents
   orchestrator.py   FastAPI app: web interface, live events, reviewer actions
   mcp_server.py     the Drydock MCP server (the agent's write path)
