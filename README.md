@@ -190,8 +190,9 @@ matches and all 600 internal duplicates. We generated this data ourselves, so tr
 the pipeline works, not as a claim about accuracy on real customer data, which depends on the data. Drydock's answer to
 an imperfect matcher is the gate: uncertain pairs wait for a person whatever the matcher's score.
 
-**Tests:** 38 live tests against Exasol, 352 offline Python tests and 28 web-interface tests. `scripts/probe_all.py`
-runs every SQL statement the product can issue against the instance and records each outcome.
+**Tests:** 40 live tests against Exasol (all passing on 15 September, on the code in this repository), 353 offline
+Python tests and 28 web-interface tests. `scripts/probe_all.py` runs every SQL statement the product can issue
+against the instance and records each outcome.
 
 ---
 
