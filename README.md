@@ -17,8 +17,7 @@ exactly**.
 
 | | |
 |---|---|
-| **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](docs/pitch/Drydock-Pitch-Deck.pdf) |
-| **Run it yourself** | [Getting started](#getting-started) (about 20 minutes) |
+| **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](Drydock Pitch Deck.pdf) |
 | **Source code** | [Project structure](#project-structure) |
 
 ---
