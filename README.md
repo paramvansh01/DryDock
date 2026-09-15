@@ -20,6 +20,7 @@ through every screen.
 
 | | |
 |---|---|
+| **Demo video** | [▶ Watch the demo](DEMO%20video.mp4) |
 | **Pitch deck** | [Drydock Pitch Deck.pdf](Drydock%20Pitch%20Deck.pdf) |
 | **Source code** | [Project structure](#project-structure) |
 
@@ -61,18 +62,27 @@ on `GOLDEN.CUSTOMERS`, the table the demo uses; customer reconciliation is the w
 
 ## Contents
 
-1. [What's new about Drydock](#whats-new-about-drydock)
-2. [How it works](#how-it-works)
-3. [Results on a live Exasol instance](#results-on-a-live-exasol-instance)
-4. [Getting started](#getting-started)
-5. [Using Drydock](#using-drydock)
-6. [Using your own data](#using-your-own-data)
-7. [Reviewing, signing off and auditing](#reviewing-signing-off-and-auditing)
-8. [Running the tests](#running-the-tests)
-9. [Deployment](#deployment)
-10. [Troubleshooting](#troubleshooting)
-11. [Project structure](#project-structure)
-12. [Built to be trusted](#built-to-be-trusted)
+1. [Demo video](#demo-video)
+2. [What's new about Drydock](#whats-new-about-drydock)
+3. [How it works](#how-it-works)
+4. [Results on a live Exasol instance](#results-on-a-live-exasol-instance)
+5. [Getting started](#getting-started)
+6. [Using Drydock](#using-drydock)
+7. [Using your own data](#using-your-own-data)
+8. [Reviewing, signing off and auditing](#reviewing-signing-off-and-auditing)
+9. [Running the tests](#running-the-tests)
+10. [Deployment](#deployment)
+11. [Troubleshooting](#troubleshooting)
+12. [Project structure](#project-structure)
+13. [Built to be trusted](#built-to-be-trusted)
+
+---
+
+## Demo video
+
+A full walkthrough of Drydock — from starting a reconciliation run to reviewing individual row diffs and merging into GOLDEN.
+
+[▶ **Watch the demo (DEMO video.mp4)**](DEMO%20video.mp4)
 
 ---
 
