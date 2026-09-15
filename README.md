@@ -8,7 +8,11 @@
 
 <p align="center">
   <a href="https://drive.google.com/file/d/1YiVW0ad95-Zgrk_QQWo7Z6H26xkKM-1h/view?usp=sharing">
-    <img src="https://img.shields.io/badge/▶%20Demo%20Video-Watch%20Now-red?style=for-the-badge&logo=google-drive" alt="Watch Demo Video">
+    <img src="https://img.shields.io/badge/▶%20Demo%20Video-Google%20Drive-red?style=for-the-badge&logo=google-drive" alt="Watch on Google Drive">
+  </a>
+  &nbsp;
+  <a href="demo%20video.mp4">
+    <img src="https://img.shields.io/badge/▶%20Demo%20Video-Local%20File-blue?style=for-the-badge&logo=github" alt="Watch local file">
   </a>
 </p>
 
@@ -26,7 +30,7 @@ through every screen.
 
 | | |
 |---|---|
-| **Demo video** | [▶ Watch the demo](https://drive.google.com/file/d/1YiVW0ad95-Zgrk_QQWo7Z6H26xkKM-1h/view?usp=sharing) |
+| **Demo video** | [▶ Google Drive](https://drive.google.com/file/d/1YiVW0ad95-Zgrk_QQWo7Z6H26xkKM-1h/view?usp=sharing) &nbsp;\| [▶ Local file](demo%20video.mp4) |
 | **Pitch deck** | [Drydock Pitch Deck.pdf](Drydock%20Pitch%20Deck.pdf) |
 | **Source code** | [Project structure](#project-structure) |
 
