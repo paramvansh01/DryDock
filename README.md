@@ -164,12 +164,14 @@ what the gate did with the proposed changes, what the undo guarantees, and how f
 
 One change merged by itself because it was small and safe. In three, the rows the matchers disagreed on started
 unticked and waited for a person, while the rest merged when the person approved. One was held whole because of
-how much it would delete. With the gate on and nobody reviewing, none of the 400 planted look-alikes that the
-matchers disagreed on reaches GOLDEN; each is checked individually (live test 18.11).
+how much it would delete. In a live run on 15 September the matcher wrongly proposed one merge, of a planted
+look-alike; with the gate on and nobody reviewing, it never reached GOLDEN (the end-of-run score counts zero false
+merges in GOLDEN). Live test 18.11 checks the same property for each of the 400 look-alikes.
 
 **What the undo guarantees.** Every merge keeps the table it replaced. Undo renames it back, then compares the
 restored table's fingerprint (an order-independent sum of per-row SHA-256 hashes) with the one taken before the
-merge (live test 18.9). Undo goes newest-applied first, and refuses if the table has changed since the merge in any
+merge (live test 18.9, and `tests/test_live_unmerge.py`, which approves two changes in the reverse of the order they
+were requested and checks that only the one applied last can be undone first). Undo goes newest-applied first, and refuses if the table has changed since the merge in any
 way the merge ledger doesn't know about, so it can never silently discard later work.
 
 **Engine timings on the laptop:**
