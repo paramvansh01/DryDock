@@ -17,7 +17,7 @@ FROZEN_TYPES = {
     "cluster.flagged", "branch.opened", "branch.materialised", "branch.op", "branch.blocked", "selfcheck",
     "diff.computed", "merge.requested", "merge.gated", "rows.deselected", "merge.applied", "merge.rejected",
     "branch.discarded", "branch.expired", "unmerge.applied", "policy.adapted", "score.updated", "golden.fingerprint",
-    "db.snapshot",
+    "db.snapshot", "dataset.activated",
 }
 
 
@@ -72,3 +72,11 @@ def test_a_failing_sink_never_breaks_the_write_path():
     events.add_sink(boom)
     events.emit("agent.note", "r1", None, text="still fine")
     events.clear_sinks()
+
+
+def test_dataset_activated_carries_what_the_ui_shows():
+    ev = events.emit("dataset.activated", None, None, name="upload", label="crm.csv + shop.csv", rows_a=10,
+                     rows_b=8, golden_rows=10, scored=False, files={"a": "crm.csv", "b": "shop.csv"}, quality=None)
+    assert ev["payload"]["name"] == "upload" and ev["payload"]["scored"] is False
+    with pytest.raises(events.EventError):
+        events.validate({**ev, "payload": {**ev["payload"], "rows_a": "ten"}})

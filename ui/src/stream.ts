@@ -30,10 +30,20 @@ export function connect(src: Source, onEvent: (e: DrydockEvent) => void, onStatu
   let retry: number | undefined;
   const open = () => {
     ws = new WebSocket(`${proto}://${location.host}/ws${qs}`);
-    ws.onopen = () => onStatus(src.kind === "live" ? "live" : "replay");
+    ws.onopen = () => {
+      // The orchestrator replays its whole history to every connection. After a reconnect, applying it on top of
+      // what is already on screen would double every entry and keep cards the server no longer has.
+      if (src.kind === "live") onEvent({ type: "__reset__", ts: "", run_id: null, branch_id: null, payload: {} });
+      onStatus(src.kind === "live" ? "live" : "replay");
+    };
     ws.onmessage = (m) => onEvent(JSON.parse(m.data));
-    ws.onclose = () => {
+    ws.onclose = (ev) => {
       if (stopped) return;
+      if (ev.code === 4401) {                     // protected server, no valid token: ask, don't hammer it
+        onStatus("locked");
+        window.dispatchEvent(new CustomEvent("drydock:auth"));
+        return;
+      }
       onStatus("offline");
       if (src.kind === "live") retry = window.setTimeout(open, 2000);
     };

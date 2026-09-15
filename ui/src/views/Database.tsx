@@ -10,13 +10,14 @@
 // A replay has no live database behind it, so the grid says so instead of showing rows.
 
 import {
-  ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Database, Eye, Gem, GitBranch, KeyRound, Layers,
-  Lock, RefreshCw, Rows3, Search, Settings2, Table2, Terminal, X,
+  ArrowDown, ArrowUp, ChevronDown, ChevronRight, Copy, Database, Download, Eye, Gem, GitBranch, History, KeyRound,
+  Layers, Lock, RefreshCw, Rows3, Search, Settings2, Table2, Terminal, Upload, X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api } from "../api";
+import { api, downloads } from "../api";
 import type { Page, SnapTable, State } from "../types";
 import { fmt, short } from "../ui";
+import { HistoryDrawer } from "./History";
 import { keysOf } from "./System";
 
 // ------------------------------------------------------------------ what each schema is
@@ -28,6 +29,7 @@ const SCHEMA: Record<string, Meta> = {
   GOLDEN_V: { note: "the view the agent reads GOLDEN through", icon: Eye, color: "#0d9488" },
   SOURCE_A: { note: "input system · read-only", icon: Table2, color: "#2563eb" },
   SOURCE_B: { note: "input system · read-only", icon: Table2, color: "#7c3aed" },
+  UPLOADS: { note: "your own two files · read-only to every branch", icon: Upload, color: "#0d9488" },
   ER_WORK: { note: "each run's published match decisions", icon: Layers, color: "#7c3aed" },
   DRYDOCK: { note: "control plane · runs, diffs, merges, events", icon: Settings2, color: "#1e3a5f" },
   BENCH: { note: "answer key · never in a prompt, no agent grant", icon: Lock, color: "#dc2626", locked: true },
@@ -40,7 +42,7 @@ const meta = (schema: string): Meta => SCHEMA[schema] ?? BRANCH;
 const WORKING_COPY = /__(NEW|ARCH|UNDONE)_/;
 
 // Pipeline order, so the tree reads the way the data flows rather than alphabetically.
-const ORDER = ["GOLDEN", "GOLDEN_V", "SOURCE_A", "SOURCE_B", "ER_WORK", "DRYDOCK", "BENCH"];
+const ORDER = ["GOLDEN", "GOLDEN_V", "UPLOADS", "SOURCE_A", "SOURCE_B", "ER_WORK", "DRYDOCK", "BENCH"];
 const rank = (s: string) => (ORDER.includes(s) ? ORDER.indexOf(s) : ORDER.length + (s.startsWith("BR_") ? 0 : 1));
 
 // ------------------------------------------------------------------ column types
@@ -67,6 +69,8 @@ export function DatabaseView({ s, replay }: { s: State; replay: boolean }) {
   }, [tables]);
 
   const picked = sel ? tables.find((t) => `${t.schema}.${t.table}` === sel) ?? null : null;
+  const [history, setHistory] = useState<string | null>(null);
+  const [lookup, setLookup] = useState("");
 
   return (
     <div className="space-y-4">
@@ -79,22 +83,36 @@ export function DatabaseView({ s, replay }: { s: State; replay: boolean }) {
             Read-only: this view has no verb that writes.
           </p>
         </div>
-        {snap && (
-          <div className="ml-auto shrink-0 text-right text-[11.5px] leading-tight text-mist">
-            <div>Exasol {snap.version}</div>
-            <div className="font-mono">session {snap.session} · catalogue read in {snap.ms} ms</div>
-          </div>
-        )}
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <form data-tour="db-lookup" onSubmit={(e) => { e.preventDefault(); if (lookup.trim()) setHistory(lookup.trim()); }}
+            className="flex items-center gap-1.5 rounded-lg border border-rule bg-hull px-2.5 py-1.5"
+            title="Type a clean-list id (e.g. G-A-1001) to see where that customer's details came from and every change">
+            <History className="h-4 w-4 text-mist" />
+            <input value={lookup} onChange={(e) => setLookup(e.target.value)} placeholder="Customer history: G-…"
+              className="w-[170px] bg-transparent text-[12.5px] outline-none placeholder:text-mist" />
+          </form>
+          <a href={downloads.golden} data-tour="db-download" title="The reconciled list as it stands now, as a CSV file"
+            className="flex items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-sm">
+            <Download className="h-4 w-4" /> Download clean list
+          </a>
+          {snap && (
+            <div className="ml-2 text-right text-[11.5px] leading-tight text-mist">
+              <div>Exasol {snap.version}</div>
+              <div className="font-mono">session …{snap.session.slice(-6)} · read in {snap.ms} ms</div>
+            </div>
+          )}
+        </div>
       </div>
 
       <div className="grid h-[calc(100vh-232px)] min-h-[520px] grid-cols-[286px_1fr] gap-4">
         <Tree groups={groups} sel={sel} onSel={setSel} find={find} onFind={setFind} />
         {picked ? (
-          <TablePane key={sel} s={s} t={picked} replay={replay} />
+          <TablePane key={sel} s={s} t={picked} replay={replay} onHistory={setHistory} />
         ) : (
           <Overview s={s} groups={groups} onOpen={setSel} />
         )}
       </div>
+      {history && <HistoryDrawer goldenId={history} onClose={() => setHistory(null)} />}
     </div>
   );
 }
@@ -112,7 +130,7 @@ function Tree({ groups, sel, onSel, find, onFind }: {
     .filter((g) => g.list.length > 0);
 
   return (
-    <aside className="card flex min-h-0 flex-col overflow-hidden">
+    <aside className="card flex min-h-0 flex-col overflow-hidden" data-tour="db-tree">
       <div className="border-b border-rule px-3 py-2.5">
         <div className="flex items-center gap-2 rounded-lg border border-rule bg-deck/60 px-2.5 py-1.5 focus-within:border-tide/50">
           <Search className="h-3.5 w-3.5 shrink-0 text-mist" />
@@ -250,7 +268,7 @@ function Overview({ s, groups, onOpen }: {
 
 const SIZES = [25, 50, 100, 200];
 
-function TablePane({ s, t, replay }: { s: State; t: SnapTable; replay: boolean }) {
+function TablePane({ s, t, replay, onHistory }: { s: State; t: SnapTable; replay: boolean; onHistory: (id: string) => void }) {
   const fq = `${t.schema}.${t.table}`;
   const m = meta(t.schema);
   const snap = s.system.snapshot;
@@ -324,6 +342,12 @@ function TablePane({ s, t, replay }: { s: State; t: SnapTable; replay: boolean }
             <div><div className="num text-xl font-bold leading-none text-fog">{cols.length}</div><div className="text-[10.5px] text-mist">columns</div></div>
             {fq === "GOLDEN.CUSTOMERS" && (
               <div><div className="font-mono text-[13px] font-semibold leading-none text-fog" title={s.golden.fingerprint ?? ""}>{short(s.golden.fingerprint)}</div><div className="text-[10.5px] text-mist">fingerprint</div></div>
+            )}
+            {t.kind === "TABLE" && !replay && (
+              <a href={downloads.table(t.schema, t.table)} title={`Download every row of ${fq} as a CSV file`}
+                className="flex items-center gap-1.5 rounded-lg border border-rule px-3 py-1.5 text-[12px] text-fog hover:border-tide hover:text-tide">
+                <Download className="h-3.5 w-3.5" /> CSV
+              </a>
             )}
           </div>
         </div>
@@ -411,7 +435,8 @@ function TablePane({ s, t, replay }: { s: State; t: SnapTable; replay: boolean }
           </div>
 
           {row != null && page?.rows[row] && (
-            <RowCard cols={cols} values={page.rows[row]} keys={keys} n={offset + row + 1} onClose={() => setRow(null)} />
+            <RowCard cols={cols} values={page.rows[row]} keys={keys} n={offset + row + 1} onClose={() => setRow(null)}
+              onHistory={fq === "GOLDEN.CUSTOMERS" ? onHistory : undefined} />
           )}
         </div>
       )}
@@ -523,9 +548,11 @@ function mark(text: string, q: string) {
 
 // ------------------------------------------------------------------ one row, read downwards
 
-function RowCard({ cols, values, keys, n, onClose }: {
+function RowCard({ cols, values, keys, n, onClose, onHistory }: {
   cols: [string, string][]; values: (string | number | boolean | null)[]; keys: Record<string, string>; n: number; onClose: () => void;
+  onHistory?: (goldenId: string) => void;
 }) {
+  const gid = values[cols.findIndex(([c]) => c === "GOLDEN_ID")];
   const [copied, setCopied] = useState(false);
   const copy = async () => {
     const obj = Object.fromEntries(cols.map(([c], i) => [c, values[i]]));
@@ -544,6 +571,12 @@ function RowCard({ cols, values, keys, n, onClose }: {
         </button>
         <button onClick={onClose} className="text-mist hover:text-fog"><X className="h-4 w-4" /></button>
       </header>
+      {onHistory && gid != null && (
+        <button onClick={() => onHistory(String(gid))}
+          className="mx-3 mt-2.5 flex items-center justify-center gap-1.5 rounded-lg border border-tide/40 bg-tide/5 px-3 py-2 text-[12.5px] font-semibold text-tide hover:bg-tide/10">
+          <History className="h-4 w-4" /> Show this customer's history
+        </button>
+      )}
       <dl className="scroll-thin min-h-0 flex-1 divide-y divide-rule/70 overflow-y-auto">
         {cols.map(([c, typ], i) => {
           const v = values[i];

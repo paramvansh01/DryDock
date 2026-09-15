@@ -75,6 +75,10 @@ SCHEMAS: dict[str, dict[str, Any]] = {
     "score.updated":      {"precision": NUM, "recall": NUM, "f1": NUM, "false_merges_in_golden": int,
                            "decoy_false_merges": int, "detail": Opt(dict)},
     "golden.fingerprint": {"table": str, "fingerprint": str, "rows": int},
+    # GOLDEN now holds another dataset (the demo, or a person's own two files). Everything before it in the
+    # stream was cleared with the run state it described; the orchestrator tells browsers to reset first.
+    "dataset.activated":  {"name": str, "label": str, "rows_a": int, "rows_b": int, "golden_rows": int,
+                           "scored": bool, "files": Opt(dict, type(None)), "quality": Opt(dict, type(None))},
     # What Exasol reports right now, for the Live System view. Broadcast to the UI only, never persisted
     # (it would count its own inserts into DRYDOCK.EVENTS).
     "db.snapshot":        {"db_time": str, "session": str, "version": str, "tables": list, "columns": dict,

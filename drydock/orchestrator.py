@@ -11,17 +11,22 @@ which the UI labels as a replay.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
+import hmac
 import json
+import re
 import threading
 import traceback
 from contextlib import asynccontextmanager
+from pathlib import PurePath
+from urllib.parse import unquote
 
 from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import branch, browse, diff, er, events, gate, merge, precedent, system
+from . import branch, browse, dataset, diff, er, events, export, gate, merge, precedent, system, uploads
 from .config import REJECT_CODES, ROOT, SETTINGS, NotVerified
 from .db import DbError, get, lit
 
@@ -41,6 +46,15 @@ def _broadcast(ev: dict) -> None:
         return
     for ws in list(CLIENTS):
         asyncio.run_coroutine_threadsafe(_send(ws, ev), LOOP)
+
+
+def _control(msg: dict) -> None:
+    """A message to every open browser that is not an event: it is never stored or replayed. "__reset__" tells
+    the UI to drop its state because the history it was built from has been replaced (a dataset switch)."""
+    if LOOP is None:
+        return
+    for ws in list(CLIENTS):
+        asyncio.run_coroutine_threadsafe(_send(ws, msg), LOOP)
 
 
 # ------------------------------------------------------------------ live Exasol metadata (System view)
@@ -117,6 +131,10 @@ async def lifespan(app: FastAPI):
     er.install_hooks()
     try:
         db = _db()
+        try:
+            dataset.ensure_schema(db)
+        except Exception as e:       # an old install without CREATE rights still serves the demo
+            print(f"[startup] could not prepare the UPLOADS tables ({type(e).__name__}: {e}); uploads are disabled")
         print(f"[startup] {_load_history(db)} saved events will be replayed to each new browser connection")
         snap = _snapshot_now("startup")["payload"]
         print(f"[startup] Exasol {snap['version']} session {snap['session']}: {len(snap['tables'])} tables "
@@ -134,6 +152,26 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Drydock orchestrator", lifespan=lifespan)
 
+# ------------------------------------------------------------------ access (optional shared token)
+# The page and its files load without a token, so it can ask for one. /internal/events already accepts only
+# local callers (the Drydock MCP server process); /health stays open for monitoring.
+OPEN = ("/", "/health", "/internal/events")
+
+
+def _token_ok(presented: str | None) -> bool:
+    want = SETTINGS.access_token
+    return not want or hmac.compare_digest(unquote(presented or ""), want)
+
+
+@app.middleware("http")
+async def _access(request: Request, call_next):
+    path = request.url.path
+    if SETTINGS.access_token and path not in OPEN and not path.startswith("/assets/"):
+        if not _token_ok(request.headers.get("x-drydock-token") or request.cookies.get("drydock_token")):
+            return JSONResponse({"ok": False, "error": "AUTH",
+                                 "message": "This Drydock is protected. Enter its access token to continue."}, status_code=401)
+    return await call_next(request)
+
 
 @app.exception_handler(NotVerified)
 async def _nv(_r, e: NotVerified):
@@ -143,6 +181,11 @@ async def _nv(_r, e: NotVerified):
 @app.exception_handler(DbError)
 async def _dbe(_r, e: DbError):
     return JSONResponse({"ok": False, "error": f"EXASOL_{e.code}", "message": e.message}, status_code=500)
+
+
+@app.exception_handler(uploads.UploadError)
+async def _ue(_r, e: uploads.UploadError):
+    return JSONResponse({"ok": False, "error": "UPLOAD", "message": str(e)}, status_code=400)
 
 
 @app.exception_handler(ValueError)
@@ -172,6 +215,9 @@ async def ingest(request: Request):
 @app.websocket("/ws")
 async def ws(websocket: WebSocket):
     await websocket.accept()
+    if not _token_ok(websocket.cookies.get("drydock_token") or websocket.query_params.get("token")):
+        await websocket.close(code=4401)             # the UI asks for the token on this code
+        return
     replay = websocket.query_params.get("replay")
     if replay:
         path = (ROOT / replay).resolve()
@@ -230,9 +276,23 @@ def set_rows(branch_id: str, body: Rows):
     return diff.set_approval(db, branch_id, sorted(set(keys)), body.approved, run_id)
 
 
+REVIEWER = re.compile(r"^[\w .,'@()-]{1,64}$")
+
+
+def _reviewer(by: str) -> str:
+    """Who made a decision, as it is recorded in MERGES.RESOLVED_BY and the audit log."""
+    by = (by or "").strip() or "human"
+    if not REVIEWER.match(by):
+        raise HTTPException(400, "A reviewer name may use letters, digits, spaces and . , ' @ ( ) - (at most 64)")
+    return by
+
+
 def _rescore_for_merge(db, merge_id: int) -> None:
     """After a human decision the gate's number (false merges in GOLDEN) changes: re-score so the
-    scoreboard reflects what is in GOLDEN now, not what it was when the run ended."""
+    scoreboard reflects what is in GOLDEN now, not what it was when the run ended. Only the demo has
+    an answer key (BENCH); uploaded data is never scored."""
+    if not dataset.active(db).scored:
+        return
     run_id = db.scalar(f"SELECT b.RUN_ID FROM DRYDOCK.MERGES m JOIN DRYDOCK.BRANCHES b ON b.BRANCH_ID = m.BRANCH_ID "
                        f"WHERE m.MERGE_ID = {int(merge_id)}")
     if run_id:
@@ -242,6 +302,7 @@ def _rescore_for_merge(db, merge_id: int) -> None:
 
 @app.post("/merges/{merge_id}/approve")
 def approve(merge_id: int, by: str = "human"):
+    by = _reviewer(by)
     db = _db()
     st = db.scalar(f"SELECT b.STATUS FROM DRYDOCK.MERGES m JOIN DRYDOCK.BRANCHES b ON b.BRANCH_ID = m.BRANCH_ID "
                    f"WHERE m.MERGE_ID = {int(merge_id)}")
@@ -256,6 +317,7 @@ def approve(merge_id: int, by: str = "human"):
 
 @app.post("/merges/{merge_id}/reject")
 def reject(merge_id: int, body: Reject, by: str = "human"):
+    by = _reviewer(by)
     if body.code not in REJECT_CODES:
         raise HTTPException(400, f"code must be one of {REJECT_CODES}")
     db = _db()
@@ -282,8 +344,9 @@ def _precedents_on_reject(db, merge_id: int, body: Reject) -> None:
 
 @app.post("/merges/{merge_id}/unmerge")
 def unmerge(merge_id: int, by: str = "human"):
-    out = merge.unmerge(_db(), merge_id, by)
-    _rescore_for_merge(_db(), merge_id)
+    out = merge.unmerge(_db(), merge_id, _reviewer(by))
+    if out.get("ok"):                       # a refused unmerge changed nothing: nothing to re-score
+        _rescore_for_merge(_db(), merge_id)
     return out
 
 
@@ -337,10 +400,16 @@ class StartRun(BaseModel):
     plan_from_run: str | None = None  # treatment: replay this run's frozen plan
 
 
+def _run_in_progress() -> str | None:
+    return next((rid for rid, t in RUNS.items() if t.is_alive()), None)
+
+
 @app.post("/runs")
 def start_run(body: StartRun):
-    if body.run_id in RUNS and RUNS[body.run_id].is_alive():
-        raise HTTPException(409, "run already in progress")
+    # One run at a time: two runs would open branches over the same GOLDEN and compete for the same review.
+    busy = _run_in_progress()
+    if busy:
+        raise HTTPException(409, f"Run {busy} is still going. Wait for it to finish before starting another.")
     from agent import loop as agent_loop
     from agent import playbook
 
@@ -402,6 +471,146 @@ def db_rows(schema: str, table: str, limit: int = browse.DEFAULT_LIMIT, offset: 
     """One page of a browsable table, read from Exasol now. SELECT only, composed by
     drydock/browse.py from validated identifiers — the browser never sends SQL."""
     return browse.rows(_db(), schema, table, limit=limit, offset=offset, order=order, direction=dir, q=q)
+
+
+# ------------------------------------------------------------------ your own data (Data view)
+
+class SideMapping(BaseModel):
+    fields: dict[str, str | None] = {}
+    formats: dict[str, str | None] = {}
+
+
+class LoadBody(BaseModel):
+    a: SideMapping
+    b: SideMapping
+    label: str | None = None
+
+
+@app.get("/uploads")
+def uploaded():
+    """The files waiting to be loaded, so a person can pick up where they left off."""
+    out = {}
+    for side in uploads.SIDES:
+        t = uploads.stored(side)
+        out[side] = uploads.profile(t) if t else None
+    return out
+
+
+@app.delete("/uploads/{side}")
+def forget_upload(side: str):
+    if side not in uploads.SIDES:
+        raise HTTPException(404)
+    uploads.discard(side)
+    return {"ok": True}
+
+
+@app.post("/uploads/check")
+def check_uploads(body: LoadBody):
+    """Apply the chosen mapping to every row without loading anything: the data-quality report."""
+    _, _, report = uploads.prepare(body.a.model_dump(), body.b.model_dump())
+    return report
+
+
+@app.post("/uploads/load")
+def load_uploads(body: LoadBody):
+    """Load both files and make them the active dataset: GOLDEN restarts from System A."""
+    if _run_in_progress():
+        raise HTTPException(409, "A run is still going. Wait for it to finish, then load your data.")
+    rows_a, rows_b, report = uploads.prepare(body.a.model_dump(), body.b.model_dump())
+    if not report["can_load"]:
+        return JSONResponse({"ok": False, "error": "DATA_PROBLEMS", "report": report,
+                             "message": "Some problems must be fixed before loading; they are listed below."},
+                            status_code=400)
+    db = _db()
+    loaded = uploads.load(db, rows_a, rows_b)
+    fa, fb = report["a"]["filename"], report["b"]["filename"]
+    label = (body.label or "").strip()[:200] or f"{fa} + {fb}"
+    quality = {side: {"rows": report[side]["rows"], "loaded": report[side]["loaded"],
+                      "issues": [{k: i[k] for k in ("code", "level", "count", "message")} for i in report[side]["issues"]]}
+               for side in ("a", "b")} | {"overlap": report["overlap"]}
+    out = _activate(dataset.UPLOAD, label, loaded["rows_a"], loaded["rows_b"],
+                    {"files": {"a": fa, "b": fb}, "quality": quality, "mapping": {"a": body.a.model_dump(),
+                                                                                  "b": body.b.model_dump()}})
+    uploads.discard()                         # the data now lives in Exasol only
+    return {"ok": True, **out, "report": report}
+
+
+# After /uploads/check and /uploads/load: FastAPI matches routes in order, and {side} would take them.
+@app.post("/uploads/{side}")
+async def upload(side: str, request: Request, filename: str = "upload.csv"):
+    """One file, sent as the raw request body. Kept (git-ignored, under runs/) until it is loaded."""
+    if side not in uploads.SIDES:
+        raise HTTPException(404)
+    size = int(request.headers.get("content-length") or 0)
+    if size > uploads.MAX_BYTES:
+        raise uploads.UploadError(f"This file is {size / 1e6:.0f} MB; Drydock accepts up to "
+                                  f"{uploads.MAX_BYTES // 1_000_000} MB per file.")
+    name = PurePath(filename).name[:200] or "upload.csv"
+    return await asyncio.to_thread(uploads.save, side, await request.body(), name)
+
+
+@app.get("/examples/{name}")
+def example_file(name: str):
+    """The two sample files (examples/, made by scripts/make_samples.py), for trying uploads."""
+    if name not in ("sample_system_a.csv", "sample_system_b.csv"):
+        raise HTTPException(404)
+    return FileResponse(ROOT / "examples" / name, media_type="text/csv", filename=name)
+
+
+@app.post("/dataset/demo")
+def use_demo():
+    """Switch back to the demo data. Uploaded tables are kept; loading files again replaces them."""
+    if _run_in_progress():
+        raise HTTPException(409, "A run is still going. Wait for it to finish, then switch.")
+    db = _db()
+    return _activate(dataset.DEMO, "Demo data (synthetic customers)", int(db.scalar(f"SELECT COUNT(*) FROM {dataset.DEMO.a}")),
+                     int(db.scalar(f"SELECT COUNT(*) FROM {dataset.DEMO.b}")), {})
+
+
+def _activate(ds: dataset.Dataset, label: str, rows_a: int, rows_b: int, detail: dict) -> dict:
+    """Switch datasets. Browsers are told to drop their state first: the history they replay is replaced."""
+    HISTORY.clear()
+    _control({"type": "__reset__", "reason": f"dataset: {ds.name}"})
+    out = dataset.activate(_db(), ds, label=label, rows_a=rows_a, rows_b=rows_b, detail=detail)
+    events.emit("dataset.activated", None, None, name=ds.name, label=label, rows_a=out["rows_a"],
+                rows_b=out["rows_b"], golden_rows=out["golden_rows"], scored=ds.scored,
+                files=detail.get("files"), quality=detail.get("quality"))
+    events.emit("golden.fingerprint", None, None, table="GOLDEN.CUSTOMERS", fingerprint=out["fingerprint"],
+                rows=out["golden_rows"])
+    return out
+
+
+# ------------------------------------------------------------------ exports + lineage (read-only)
+
+def _csv(name: str, header_rows: tuple[list[str], list]) -> StreamingResponse:
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M")
+    return StreamingResponse(export.to_csv(*header_rows), media_type="text/csv; charset=utf-8",
+                             headers={"Content-Disposition": f'attachment; filename="drydock-{name}-{stamp}.csv"'})
+
+
+@app.get("/export/golden.csv")
+def export_golden():
+    return _csv("clean-list", export.safe(export.golden, _db()))
+
+
+@app.get("/export/audit.csv")
+def export_audit():
+    return _csv("audit-log", export.safe(export.audit, _db()))
+
+
+@app.get("/export/changes/{branch_id}.csv")
+def export_changes(branch_id: str):
+    return _csv(f"changes-{branch_id.lower()}", export.safe(export.changes, _db(), branch_id))
+
+
+@app.get("/export/table.csv")
+def export_table(schema: str, table: str):
+    return _csv(f"{schema}-{table}".lower(), export.safe(export.table, _db(), schema, table))
+
+
+@app.get("/golden/{golden_id}/history")
+def golden_history(golden_id: str):
+    return export.safe(export.history, _db(), golden_id)
 
 
 @app.get("/health")

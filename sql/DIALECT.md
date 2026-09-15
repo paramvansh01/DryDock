@@ -192,3 +192,39 @@ PROVEN 2026-09-13 (auto, verify.py)
 SQL:    INSERT INTO PROBE_SCRATCH.V9_P VALUES (1, 'b')
 RESULT: [27002] constraint violation - primary key (SYS_132778252691082074890007398400 on table V9_P) (Session: 1876154425032048640)
 NOTE:   PROVEN = the duplicate was refused with 27002. Supersedes the 2026-09-12 entry titled 'PRIMARY KEY enforcement (default)', whose DISPROVEN label meant the same fact, inverted.
+
+### REGEXP_REPLACE with the Unicode letter class \p{L}
+PROVEN 2026-09-15 (scripts/probe.py)
+SQL:    SELECT UPPER(TRIM(REGEXP_REPLACE('José Müller-O''Neil 李小龍 Łukasz', '[^\p{L} '']', ''))) AS N, UPPER(TRIM(REGEXP_REPLACE('José Müller-O''Neil 李小龍 Łukasz', '[^A-Za-z '']', ''))) AS OLD_N
+RESULT: JOSÉ MÜLLERO'NEIL 李小龍 ŁUKASZ | JOS MLLERO'NEIL  UKASZ
+NOTE:   drydock/er.py name normalisation. The ASCII class it replaced dropped accented letters and erased names in other scripts.
+
+### REGEXP_REPLACE with Unicode letters and digits \p{L}\p{N}
+PROVEN 2026-09-15 (scripts/probe.py)
+SQL:    SELECT UPPER(REGEXP_REPLACE('Königstraße 5, Wohnung ٣ — 北京路12号', '[^\p{L}\p{N}]', '')) AS NEW_N, UPPER(REGEXP_REPLACE('Königstraße 5, Wohnung ٣ — 北京路12号', '[^A-Za-z0-9]', '')) AS OLD_N
+RESULT: KÖNIGSTRAßE5WOHNUNG٣北京路12号 | KNIGSTRAE5WOHNUNG12
+NOTE:   drydock/er.py street normalisation (STREET_N).
+
+### CREATE TABLE IF NOT EXISTS (idempotent)
+PROVEN 2026-09-15 (scripts/probe.py)
+SQL:    CREATE TABLE IF NOT EXISTS PROBE_SCRATCH.UP_T (CUST_ID VARCHAR(64), FULL_NAME VARCHAR(200), DATE_OF_BIRTH DATE, CREATED_AT TIMESTAMP)
+RESULT: OK, 0 rows affected, 29ms; run again: OK, 0 rows affected, 1ms (no error, table unchanged)
+NOTE:   sql/03_uploads.sql, applied at every orchestrator startup.
+
+### Multi-row INSERT ... VALUES with DATE and TIMESTAMP literals
+PROVEN 2026-09-15 (scripts/probe.py)
+SQL:    INSERT INTO PROBE_SCRATCH.UP_T (CUST_ID, FULL_NAME, DATE_OF_BIRTH, CREATED_AT) VALUES ('A-1', 'José O''Neil', DATE '1980-02-29', TIMESTAMP '2024-01-01 10:00:00.000'), ('A-2', NULL, NULL, NULL)
+RESULT: OK, 2 rows affected, 24ms
+NOTE:   drydock/uploads.py loads rows this way, 500 per statement; DRYDOCK_SVC holds no IMPORT privilege (check V3).
+
+### NULL in || concatenation, and the empty string
+PROVEN 2026-09-15 (scripts/probe.py)
+SQL:    SELECT NULL || ' ' || 'Smith' AS NULL_FIRST, 'Jo' || ' ' || NULL AS NULL_LAST, TRIM(NULL || ' ' || 'Smith') AS TRIMMED, CASE WHEN '' IS NULL THEN 'empty string is NULL' ELSE 'empty string is a value' END AS EMPTY
+RESULT:  Smith | Jo  | Smith | empty string is NULL
+NOTE:   NULL concatenates as ''. An uploaded System B record with only a last name keeps its name through FIRST_NAME || ' ' || LAST_NAME.
+
+### Unmerge LIFO by application order (self-join on DRYDOCK.MERGES)
+PROVEN 2026-09-15 (live data, run_202609142149)
+SQL:    SELECT l.MERGE_ID FROM DRYDOCK.MERGES l JOIN DRYDOCK.MERGES m ON m.MERGE_ID = 87 WHERE l.MERGE_ID <> m.MERGE_ID AND l.DECISION = 'MERGED' AND l.UNMERGED_AT IS NULL AND (l.RESOLVED_AT > m.RESOLVED_AT OR (l.RESOLVED_AT = m.RESOLVED_AT AND l.MERGE_ID > m.MERGE_ID)) AND (',' || l.TABLES_MERGED || ',') LIKE '%,CUSTOMERS,%' ORDER BY l.RESOLVED_AT DESC, l.MERGE_ID DESC LIMIT 1
+RESULT: 86
+NOTE:   merges applied in the order 85, 87, 84, 86. The previous rule (MIN(MERGE_ID) > 87) returned NULL and allowed undoing 87, which would have discarded 84 and 86.

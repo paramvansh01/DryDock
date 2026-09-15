@@ -38,8 +38,12 @@ export function reduce(s: State, e: DrydockEvent): State {
   const p = e.payload;
   const bid = e.branch_id;
   s = { ...s, events: s.events + 1 };
-  if (e.type !== "db.snapshot" && e.type !== "__replay__") s = { ...s, recent: [...s.recent, e].slice(-40) };
+  if (e.type !== "db.snapshot" && e.type !== "__replay__" && e.type !== "__reset__") s = { ...s, recent: [...s.recent, e].slice(-40) };
   switch (e.type) {
+    // Not an event: the history this state was built from has been replaced (a (re)connect replays it in full,
+    // or the dataset was switched). Start again, keeping only what Exasol last reported.
+    case "__reset__":
+      return { ...initialState, system: s.system };
     case "db.snapshot":
       return { ...s, system: { snapshot: { ...(p as any), ts: e.ts } } };
     case "__replay__":
@@ -56,9 +60,10 @@ export function reduce(s: State, e: DrydockEvent): State {
     }
     case "run.ended": {
       const r = e.run_id && s.runs[e.run_id];
-      return { ...s, runs: r ? { ...s.runs, [r.id]: { ...r, ended: { status: p.status } } } : s.runs,
+      const error: string | null = p.status === "OK" ? null : (p.summary?.error ?? null);
+      return { ...s, runs: r ? { ...s.runs, [r.id]: { ...r, ended: { status: p.status, error } } } : s.runs,
                narrative: narr(s, { ts: e.ts, kind: "run", tone: p.status === "OK" ? "good" : "bad",
-                                    text: `Run ${e.run_id} ended: ${p.status}` }) };
+                                    text: `Run ${e.run_id} ended: ${p.status}${error ? ` — ${error}` : ""}` }) };
     }
     case "agent.note":
       return { ...s, illustrative: s.illustrative || /ILLUSTRATIVE/.test(p.text),
@@ -174,6 +179,10 @@ export function reduce(s: State, e: DrydockEvent): State {
       return { ...s, golden: { fingerprint: p.fingerprint, rows: p.rows,
                                history: [...s.golden.history, { ts: e.ts, fingerprint: p.fingerprint, cause }] } };
     }
+    case "dataset.activated":
+      return { ...s, narrative: narr(s, { ts: e.ts, kind: "data", tone: "info",
+                 text: `Now working on ${p.label}: ${fmt(p.rows_a)} records in System A, ${fmt(p.rows_b)} in System B; ` +
+                       `GOLDEN starts from ${fmt(p.golden_rows)} rows` + (p.scored ? "" : " (no answer key, so no score)") }) };
     default:
       return s;
   }

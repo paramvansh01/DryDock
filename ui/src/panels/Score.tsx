@@ -12,7 +12,11 @@ export function Score({ s }: { s: State }) {
   return (
     <Panel title="A/B scoreboard" right={s.illustrative ? <span className="text-[10px] text-brass">illustrative</span> : null}>
       {rows.length === 0 ? (
-        <p className="px-3 py-3 text-xs text-mist">No scored run yet. Scores come from bench/score.py at the end of a run.</p>
+        <p className="px-3 py-3 text-xs text-mist">
+          {s.system.snapshot?.config.dataset?.scored === false
+            ? "Scores need an answer key, and only the demo data has one. For your own data, your review is the check."
+            : "No scored run yet. Scores come from bench/score.py at the end of a run."}
+        </p>
       ) : (
         <table className="w-full text-sm">
           <thead>

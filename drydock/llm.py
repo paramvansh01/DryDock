@@ -49,7 +49,12 @@ def new_client():
     """A fresh client the CALLER must keep referenced for as long as it is used. agent/loop.py takes one
     per run: each run has its own event loop, and client.aio should not be shared across loops."""
     from google import genai
-    return genai.Client(api_key=api_key())
+    from google.genai import types
+
+    from .config import SETTINGS
+    retry = types.HttpRetryOptions(attempts=max(1, SETTINGS.llm_attempts), initial_delay=1.0, max_delay=8.0)
+    return genai.Client(api_key=api_key(),
+                        http_options=types.HttpOptions(timeout=SETTINGS.llm_timeout_s * 1000, retry_options=retry))
 
 
 def finish_reason(resp) -> str | None:

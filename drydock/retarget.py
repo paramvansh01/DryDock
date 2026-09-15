@@ -11,7 +11,7 @@ Rules:
                          READ  -> BR_x.T if materialised in this branch, else GOLDEN.T
   BR_<own>.T             left alone (tables the agent created in its branch)
   unqualified T          own-branch table if the branch created it, a CTE name, else BLOCK
-  SOURCE_A / SOURCE_B / ER_WORK  READ only
+  SOURCE_A / SOURCE_B / UPLOADS / ER_WORK  READ only
   DRYDOCK / BENCH / SYS / EXA_* / other BR_* / anything else  BLOCK
   reserved names (__ARCH_, __NEW_, __UNDONE_) anywhere in GOLDEN  BLOCK
   DDL on GOLDEN, DROP SCHEMA, GRANT/REVOKE, users, sessions, transaction control,
@@ -32,7 +32,7 @@ logging.getLogger("sqlglot").setLevel(logging.CRITICAL)
 
 GOVERNED = {"GOLDEN"}                     # schemas whose tables are branchable
 GOVERNED_ALIASES = {"GOLDEN_V": "GOLDEN"}  # agent-facing read views of GOVERNED
-READ_ONLY = {"SOURCE_A", "SOURCE_B", "ER_WORK"}
+READ_ONLY = {"SOURCE_A", "SOURCE_B", "UPLOADS", "ER_WORK"}   # UPLOADS: a person's own two files
 FORBIDDEN = {"DRYDOCK", "BENCH", "SYS", "PROBE_SCRATCH"}
 RESERVED_MARKERS = ("__ARCH_", "__NEW_", "__UNDONE_")
 

@@ -24,6 +24,7 @@ from collections import defaultdict
 import sqlglot
 from sqlglot import exp
 
+from . import dataset
 from . import diff as diffmod
 from . import events
 from .config import ER_WORK, MATCH_CLASSES, require_verified
@@ -153,7 +154,9 @@ def regexp_like(expr: str, pattern: str) -> str:
 
 def _norm_select(src: str, e: dict[str, str], id_expr: str) -> str:
     """Standardised comparison columns. e maps golden field -> expression over the source."""
-    name = f"UPPER(TRIM(REGEXP_REPLACE({e['FULL_NAME']}, '[^A-Za-z '']', '')))"
+    # \p{L}: any letter in any script. '[^A-Za-z ...]' turned "José Müller" into "JOS MLLER" and erased
+    # names written in other scripts entirely (probed on the live instance, sql/DIALECT.md).
+    name = f"UPPER(TRIM(REGEXP_REPLACE({e['FULL_NAME']}, '[^\\p{{L}} '']', '')))"
     base = f"REGEXP_REPLACE(REGEXP_REPLACE({name}, '{BUSINESS_RX}', ''), '{SUFFIX_RX}', '')"
     return (
         f"SELECT {id_expr} AS ID, {name} AS NAME_N, {base} AS NAME_BASE, "
@@ -166,7 +169,7 @@ def _norm_select(src: str, e: dict[str, str], id_expr: str) -> str:
         f"RIGHT(REGEXP_REPLACE({e['PHONE']}, '[^0-9]', ''), 10) AS PHONE_N, "
         f"RIGHT(REGEXP_REPLACE({e['PHONE']}, '[^0-9]', ''), 7) AS PHONE7, "
         f"UPPER(REPLACE({e['POSTCODE']}, ' ', '')) AS POSTCODE_N, "
-        f"UPPER(REGEXP_REPLACE({e['ADDR_LINE']}, '[^A-Za-z0-9]', '')) AS STREET_N, "
+        f"UPPER(REGEXP_REPLACE({e['ADDR_LINE']}, '[^\\p{{L}}\\p{{N}}]', '')) AS STREET_N, "
         f"UPPER(TRIM({e['CITY']})) AS CITY_N, {e['DATE_OF_BIRTH']} AS DOB "
         f"FROM {src}")
 
@@ -174,11 +177,12 @@ def _norm_select(src: str, e: dict[str, str], id_expr: str) -> str:
 def build_norm(db: Db, run_id: str) -> tuple[str, str]:
     tag = run_tag(run_id)
     m = load_mapping(db, run_id)
+    src = dataset.active(db)
     a_expr = {f: f for f in GOLDEN_FIELDS}
     a_tab, b_tab = f"{ER_WORK}.A_NORM_{tag}", f"{ER_WORK}.B_NORM_{tag}"
-    db.run(clean(f"CREATE OR REPLACE TABLE {a_tab} AS {_norm_select('SOURCE_A.CUSTOMERS', a_expr, 'CUST_ID')}",
+    db.run(clean(f"CREATE OR REPLACE TABLE {a_tab} AS {_norm_select(src.a, a_expr, 'CUST_ID')}",
                  "er.norm_a"))
-    db.run(clean(f"CREATE OR REPLACE TABLE {b_tab} AS {_norm_select('SOURCE_B.CLIENTS', m, 'CLIENT_REF')}",
+    db.run(clean(f"CREATE OR REPLACE TABLE {b_tab} AS {_norm_select(src.b, m, 'CLIENT_REF')}",
                  "er.norm_b"))
     return a_tab, b_tab
 
@@ -403,18 +407,18 @@ def published_columns() -> dict:
             "dedup": ["KEEP_GOLDEN_ID", "DROP_GOLDEN_ID", "A_ID", "A_DUP_ID", "PANEL_RESULT", "PAIR_ID"]}
 
 
-def publish_sql(run_id: str, tag: str, m: dict) -> list[str]:
+def publish_sql(run_id: str, tag: str, m: dict, src: dataset.Dataset = dataset.DEMO) -> list[str]:
     """The three ER_WORK decision tables for a run, as SQL (pure: offline-testable)."""
     bvals = ", ".join(f"{m[f]} AS B_{f}" for f in GOLDEN_FIELDS) + \
         f", {m.get('LAST_SEEN', 'LAST_SEEN')} AS B_LAST_SEEN"
     return [
         f"CREATE OR REPLACE TABLE {ER_WORK}.MATCHES_{tag} AS SELECT 'G-' || c.A_ID AS GOLDEN_ID, c.A_ID, c.B_ID, "
         f"c.MATCH_CLASS, c.PANEL_RESULT, c.PAIR_ID, a.CREATED_AT AS A_CREATED_AT, {bvals} "
-        "FROM DRYDOCK.CANDIDATES c JOIN SOURCE_B.CLIENTS ON SOURCE_B.CLIENTS.CLIENT_REF = c.B_ID "
-        "JOIN SOURCE_A.CUSTOMERS a ON a.CUST_ID = c.A_ID "
+        f"FROM DRYDOCK.CANDIDATES c JOIN {src.b} ON {src.b}.CLIENT_REF = c.B_ID "
+        f"JOIN {src.a} a ON a.CUST_ID = c.A_ID "
         f"WHERE c.RUN_ID = {lit(run_id)} AND c.KIND = 'AB' AND c.VERDICT = 'MERGE'",
         f"CREATE OR REPLACE TABLE {ER_WORK}.NEW_{tag} AS SELECT 'G-' || CLIENT_REF AS NEW_GOLDEN_ID, "
-        f"CLIENT_REF AS B_ID, {bvals} FROM SOURCE_B.CLIENTS WHERE CLIENT_REF NOT IN ("
+        f"CLIENT_REF AS B_ID, {bvals} FROM {src.b} WHERE CLIENT_REF NOT IN ("
         f"SELECT B_ID FROM DRYDOCK.CANDIDATES WHERE RUN_ID = {lit(run_id)} AND KIND = 'AB' "
         "AND VERDICT IN ('MERGE', 'FLAG'))",
         f"CREATE OR REPLACE TABLE {ER_WORK}.DEDUP_{tag} AS SELECT 'G-' || A_ID AS KEEP_GOLDEN_ID, "
@@ -424,7 +428,7 @@ def publish_sql(run_id: str, tag: str, m: dict) -> list[str]:
 
 
 def publish(db: Db, run_id: str, tag: str) -> None:
-    for sql in publish_sql(run_id, tag, load_mapping(db, run_id)):
+    for sql in publish_sql(run_id, tag, load_mapping(db, run_id), dataset.active(db)):
         db.run(clean(sql, "er.publish"))
 
 
@@ -496,8 +500,9 @@ def enrich_cards(db: Db, bid: str, run_id: str | None, cards: list[dict]) -> lis
                 pairs.setdefault(gid, r)
     a_ids = sorted({p["A_ID"] for p in pairs.values()} | {p["B_ID"] for p in pairs.values() if p["KIND"] == "AA"})
     b_ids = sorted({p["B_ID"] for p in pairs.values() if p["KIND"] == "AB"})
-    a_rec = _records(db, "SOURCE_A.CUSTOMERS", "CUST_ID", a_ids)
-    b_rec = _records(db, "SOURCE_B.CLIENTS", "CLIENT_REF", b_ids)
+    src = dataset.active(db)
+    a_rec = _records(db, src.a, "CUST_ID", a_ids)
+    b_rec = _records(db, src.b, "CLIENT_REF", b_ids)
     prec_ids = sorted({int(x) for p in pairs.values() for x in json.loads(p["PRECEDENTS_USED"] or "[]")})
     precs = {}
     if prec_ids:

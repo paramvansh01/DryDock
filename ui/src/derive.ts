@@ -6,7 +6,7 @@ import type { Branch, Card, Pair, Rec, State } from "./types";
 
 // ------------------------------------------------------------------ stepper
 
-export type StepStatus = "done" | "current" | "pending";
+export type StepStatus = "done" | "current" | "pending" | "failed";
 export interface Step { n: number; label: string; status: StepStatus; note: string }
 
 export function steps(s: State): Step[] {
@@ -22,17 +22,19 @@ export function steps(s: State): Step[] {
     ["Review Matches", !!s.panel && !pending && anyMerged],
     ["See Diff", anyDiff],
     ["Merge", anyMerged && !pending],
-    ["Complete", !!run?.ended],
+    ["Complete", run?.ended?.status === "OK"],
   ];
   const started = !!run;
+  const failed = !!run?.ended && run.ended.status !== "OK";
   let currentSet = false;
   return raw.map(([label, done], i) => {
     let status: StepStatus = done ? "done" : "pending";
     if (!done && !currentSet && started) {
-      status = "current";
+      status = failed ? "failed" : "current";   // a stopped run halts where it got to; it did not complete
       currentSet = true;
     }
-    return { n: i + 1, label, status, note: status === "done" ? "Completed" : status === "current" ? "In Progress" : "Pending" };
+    const note = { done: "Completed", current: "In Progress", pending: "Pending", failed: "Stopped" }[status];
+    return { n: i + 1, label, status, note };
   });
 }
 
@@ -243,4 +245,69 @@ export const ADJUDICATORS: Record<string, AdjudicatorInfo> = {
 export function adjudicatorInfo(rung: string | null | undefined): AdjudicatorInfo | null {
   if (!rung) return null;
   return ADJUDICATORS[rung] ?? { label: rung, detail: `Adjudicator: ${rung}` };
+}
+
+
+// ------------------------------------------------------------------ plain language
+// The gate and the backend speak in codes. A person who has never seen Drydock should not have to.
+
+/** One sentence for a gate reason such as "ROWS_NEED_REVIEW (20 panel-split rows)". */
+export function explainReason(reason: string | null | undefined): string {
+  if (!reason) return "";
+  const n = (reason.match(/\(([^)]*)\)/) ?? [])[1] ?? "";
+  const code = reason.split(/[ (:]/)[0];
+  switch (code) {
+    case "WITHIN_TIER": return "Small and safe, so it was merged automatically.";
+    case "ROWS_NEED_REVIEW": return `The three matchers disagreed on ${n.replace(" panel-split rows", "") || "some"} rows. Those rows start unticked: look at them in the Diff Viewer, then merge what you agree with.`;
+    case "DELETE_PCT": return `This would delete ${n.split(" > ")[0] || "part"} of your list; this tier only deletes up to ${n.split(" > ")[1] || "a small share"} without a person. Check the deleted rows first.`;
+    case "DELETE_PCT_EXCEEDED": return "Blocked at every tier: it would delete more than the hard safety limit (5% by default) in one go. Nothing can merge it; split the change instead.";
+    case "TOO_MANY_ROWS": return `This changes ${n.split(" > ")[0] || "many"} rows; this tier merges at most ${n.split(" > ")[1] || "a set number"} on its own.`;
+    case "RISK": return "Too uncertain for its size: rows changed × how unsure the match is came out above this tier's limit.";
+    case "BELOW_MIN_CONFIDENCE": return "Earlier rejections raised the confidence bar, and this change is below it.";
+    case "DELETES_NOT_ALLOWED_AT_TIER": return "This tier never deletes rows on its own.";
+    case "GATE_DISABLED": return "The gate was switched off for this comparison run, so it merged without checks.";
+    case "BASE_DRIFT": return "The official list changed under this copy since it was made. Discard it and run again.";
+    case "SCHEMA_CHANGED": return "The table's columns changed since the copy was made, so the change cannot be applied safely.";
+    case "NO_DIFF": return "This copy changes nothing.";
+    case "STAGING_FINGERPRINT_MISMATCH": return "The staged result did not match what was reviewed, so nothing was written.";
+    case "UNACKNOWLEDGED_ERRORS": return "Some statements in this copy failed. It cannot merge until that is dealt with.";
+    case "FORBIDDEN_TABLE": return "This copy touched a table Drydock never merges.";
+    default:
+      if (code.startsWith("TIER_")) return "This tier never merges on its own: everything waits for a person.";
+      if (code.startsWith("BRANCH_")) return "This copy is no longer open, so it cannot be merged.";
+      return reason;
+  }
+}
+
+export interface Explained { title: string; body: string; fix?: string }
+
+/** A backend error message, for a person. */
+export function explainError(message: string | null | undefined): Explained {
+  const m = message ?? "";
+  if (/NotVerified|NOT_VERIFIED|verification not|DRYDOCK_VERIFY_KEY|TAMPERED|altered outside/i.test(m)) {
+    return {
+      title: "Drydock's safety checks aren't signed for this server",
+      body: "Before it changes anything, Drydock proves the database behaves the way it relies on. Those checks are sealed with " +
+            "your secret word, and the server that is running cannot open the seal (it was started with a different word, or none).",
+      fix: "In the terminal: stop the server (Ctrl-C). In that same terminal type your secret word, run " +
+           "scripts/verify.py --only V3,V4,V5,V6,V11, then start the server again. Use one word, in one terminal.",
+    };
+  }
+  if (/Agent mode works on the demo data only/i.test(m)) {
+    return { title: "Agent mode is for the demo data", body: m, fix: "Choose 'scripted' in Start New Run." };
+  }
+  if (/still going/i.test(m)) return { title: "A run is still going", body: m };
+  if (/gemini_unavailable|503|UNAVAILABLE|quota/i.test(m)) {
+    return { title: "The AI helper (Gemini) is busy", body: "The pairs it would have advised on wait for a person instead.", fix: "Nothing to do: review them in the Merge Gate." };
+  }
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) {
+    return { title: "Drydock's server is not reachable", body: "The page cannot reach the orchestrator.", fix: "Check the terminal that runs it, or start it again." };
+  }
+  return { title: "Something went wrong", body: m };
+}
+
+/** Plain words for a readiness check status. */
+export function checkWord(status: string): string {
+  return { PASS: "passed", FAIL: "failed", UNKNOWN: "not run yet", TAMPERED: "sealed with a different secret word",
+           "UNSIGNED-KEY-MISSING": "cannot be read: this server has no secret word" }[status] ?? status.toLowerCase();
 }

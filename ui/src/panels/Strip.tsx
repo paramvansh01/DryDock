@@ -3,7 +3,7 @@ import { Check, Undo2, X } from "lucide-react";
 import { useState } from "react";
 import { api } from "../api";
 import type { State } from "../types";
-import { Chip, fmt, statusTone } from "../ui";
+import { Chip, fmt, reportError, statusTone, toast } from "../ui";
 
 // One card per branch, accumulating as the agent works. Merged branches offer
 // unmerge; the fingerprint tick appears only when unmerge.applied reports a match.
@@ -11,7 +11,23 @@ export function Strip({ s, focus, onFocus, canAct }: { s: State; focus: string |
   const [busy, setBusy] = useState<string | null>(null);
   const unmerge = async (id: string, mergeId: number) => {
     setBusy(id);
-    try { await api.unmerge(mergeId); } catch (e) { alert(String(e)); }
+    try {
+      const out = await api.unmerge(mergeId);
+      if (out.ok === false) {
+        // Refusals are answers, not errors: say which change has to go first, by the name on its card.
+        const later = Object.values(s.branches).find((b) => b.applied?.merge_id === out.superseded_by);
+        if (out.code === "UNMERGE_SUPERSEDED") {
+          toast("warn", "Undo the newer change first",
+                `${later?.cls || `Change #${out.superseded_by}`} was applied to the list after this one. Changes are undone ` +
+                "newest-first, so the list only ever goes back to a state that really existed.",
+                `Click unmerge on ${later?.cls || `change #${out.superseded_by}`} first, then on this one.`);
+        } else {
+          toast("warn", "This change can't be undone safely", out.message);
+        }
+      } else {
+        toast("good", "Undone: the list is back exactly as it was", "The fingerprint of the restored list matches the one taken before the merge.");
+      }
+    } catch (e) { reportError(e); }
     setBusy(null);
   };
   return (

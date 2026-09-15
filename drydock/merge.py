@@ -13,7 +13,10 @@ apply(): stage-then-swap with row-level approval.
   3. SWAP    two same-schema RENAMEs in one transaction (DDL is transactional on Exasol);
              SWAP_STAGE is recorded so recover() can finish an interrupted swap.
   4. RECORD the merge and close the branch.
-unmerge(): two renames back, then fingerprint == PRE_MERGE_FINGERPRINT. LIFO per table.
+unmerge(): two renames back, then fingerprint == PRE_MERGE_FINGERPRINT. LIFO per table, where
+           "last" means last APPLIED (RESOLVED_AT), and only while GOLDEN still fingerprints as the
+           merge left it.
+reseed(): replace GOLDEN with a dataset's starting snapshot (a new dataset, or a reset).
 
 The staging CTAS is generated from the catalogue; every statement passes lintguard.clean().
 """
@@ -182,8 +185,23 @@ def apply(db: Db, merge_id: int, resolved_by: str = "human") -> dict:
             "stage_ms": stage_ms, "swap_ms": swap_ms, "pre_fingerprint": pre_hex, "post_fingerprint": post_hex}
 
 
+def later_merge_sql(merge_id: int, table: str) -> str:
+    """The active merge applied to GOLDEN.<table> most recently AFTER merge_id, if any.
+
+    "After" is application order (RESOLVED_AT, stamped under the GOLDEN write lock), not MERGE_ID:
+    ids are handed out when a merge is REQUESTED, and a reviewer can approve held requests in any
+    order. Ordering by id let an older-applied merge be undone over a newer one, restoring an archive
+    that predates the newer merge and silently discarding it while the fingerprint still "matched"."""
+    return clean(
+        f"SELECT l.MERGE_ID FROM DRYDOCK.MERGES l JOIN DRYDOCK.MERGES m ON m.MERGE_ID = {int(merge_id)} "
+        "WHERE l.MERGE_ID <> m.MERGE_ID AND l.DECISION = 'MERGED' AND l.UNMERGED_AT IS NULL "
+        "AND (l.RESOLVED_AT > m.RESOLVED_AT OR (l.RESOLVED_AT = m.RESOLVED_AT AND l.MERGE_ID > m.MERGE_ID)) "
+        f"AND (',' || l.TABLES_MERGED || ',') LIKE {lit('%,' + ident(table) + ',%')} "
+        "ORDER BY l.RESOLVED_AT DESC, l.MERGE_ID DESC LIMIT 1", "merge.lifo")
+
+
 def unmerge(db: Db, merge_id: int, by: str = "human") -> dict:
-    """Two renames back, verified against PRE_MERGE_FINGERPRINT. LIFO per table."""
+    """Two renames back, verified against PRE_MERGE_FINGERPRINT. LIFO per table, in application order."""
     require_verified("V5")
     v4 = require_answered("V4")["V4"]
     mid = int(merge_id)
@@ -195,12 +213,18 @@ def unmerge(db: Db, merge_id: int, by: str = "human") -> dict:
         m = m[0]
         tables = [t for t in (m["TABLES_MERGED"] or "").split(",") if t]
         for t in tables:
-            later = db.scalar(f"SELECT MIN(MERGE_ID) FROM DRYDOCK.MERGES WHERE MERGE_ID > {mid} "
-                              f"AND DECISION = 'MERGED' AND UNMERGED_AT IS NULL "
-                              f"AND (',' || TABLES_MERGED || ',') LIKE {lit('%,' + t + ',%')}")
+            later = db.scalar(later_merge_sql(mid, t))
             if later is not None:
                 return {"ok": False, "code": "UNMERGE_SUPERSEDED", "superseded_by": int(later),
-                        "message": f"merge {later} touched {GOLDEN}.{t} after this one; unmerge that first (LIFO)"}
+                        "message": f"merge {later} changed {GOLDEN}.{t} after this one; unmerge that first (LIFO)"}
+        # Second guard: the table must still be exactly what this merge produced. It catches any writer
+        # the MERGES ledger does not know about; renaming the archive back would silently discard its work.
+        if len(tables) == 1 and m["POST_MERGE_FINGERPRINT"]:
+            now = table_fingerprint(db, GOLDEN, tables[0])
+            if now.hex != m["POST_MERGE_FINGERPRINT"]:
+                return {"ok": False, "code": "GOLDEN_CHANGED_SINCE_MERGE",
+                        "message": f"{GOLDEN}.{tables[0]} has changed since merge {mid} was applied, so undoing it "
+                                   "would also discard those later changes. Nothing was undone."}
         match = True
         restored = ""
         fps: list[tuple[str, object]] = []
@@ -228,6 +252,28 @@ def unmerge(db: Db, merge_id: int, by: str = "human") -> dict:
         events.emit("golden.fingerprint", m["RUN_ID"], None, table=f"{GOLDEN}.{t}", fingerprint=fp.hex, rows=fp.n)
     return {"ok": True, "fingerprint_match": match, "restored": restored,
             "expected": m["PRE_MERGE_FINGERPRINT"], "by": by}
+
+
+# How GOLDEN.CUSTOMERS comes to exist: reseed() runs this shape with the active dataset's snapshot (the demo's is
+# below; UPLOADS.GOLDEN_SEED has the same columns). drydock/catalogue.py learns GOLDEN's columns from this line.
+DEMO_SEED_CTAS = "CREATE TABLE GOLDEN.CUSTOMERS AS SELECT * FROM BENCH.GOLDEN_CLEAN"
+
+
+def reseed(db: Db, seed: str) -> Fingerprint:
+    """Replace GOLDEN with a dataset's starting snapshot: every GOLDEN table (the archives and staging
+    copies of earlier merges included) is dropped and GOLDEN.CUSTOMERS is recreated from `seed`.
+
+    Only for a dataset switch or a reset, after the run state that pointed at the old GOLDEN has been
+    cleared (drydock/dataset.py does both, in that order). It lives here because this module is the
+    single write path to GOLDEN."""
+    schema, _, table = seed.partition(".")
+    src = qname(schema, table)
+    with golden_write_lock():
+        for (t,) in db.rows(f"SELECT TABLE_NAME FROM EXA_ALL_TABLES WHERE TABLE_SCHEMA = {lit(GOLDEN)}"):
+            db.run(clean(f"DROP TABLE {qname(GOLDEN, t)}", "merge.reseed"))
+        db.run(clean(f"CREATE TABLE {GOLDEN}.CUSTOMERS AS SELECT * FROM {src}", "merge.reseed"))
+        refresh_read_views(db)
+    return table_fingerprint(db, GOLDEN, "CUSTOMERS")
 
 
 def recover(db: Db) -> list[str]:
