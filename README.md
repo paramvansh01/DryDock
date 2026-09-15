@@ -13,6 +13,9 @@ governed write path: the agent never touches production. It works on a **branch*
 person sees the **exact rows** that would change and approves them row by row, and every merge can be **undone
 exactly**.
 
+It runs on the included demo data or on **your own two customer files**, and a guided tour walks a first-time user
+through every screen.
+
 ![Drydock's Live System view: every moving dot is a real event, every number is what Exasol reports](docs/images/system.png)
 
 | | |
@@ -22,17 +25,53 @@ exactly**.
 
 ---
 
+## What's new about Drydock
+
+Today, an AI agent that can write to a database is trusted with a SQL statement. A person may read the statement
+first, but a statement is only a prediction: nobody sees its effect until it has already happened, and undoing it
+means a backup restore or hand-written reverse SQL. Drydock replaces trust in the statement with **evidence about its
+effect**, enforced by the database itself.
+
+| | The usual way | Drydock |
+|---|---|---|
+| **What a person approves** | the SQL text: a prediction | the rows that actually changed, observed on a real copy of production inside Exasol |
+| **How much** | all or nothing | row by row: untick any row, and only the ticked rows ever reach production |
+| **Proof the write matches the review** | none | the staged result must fingerprint to an independently computed "expected after" state, or nothing is swapped in |
+| **Undo** | restore a backup, or write reverse SQL by hand | exact: the archived table is renamed back and its fingerprint proves byte-for-byte equality; changes are undone newest-first, so production only ever returns to a state that existed |
+| **Who enforces the limits** | the agent's instructions | the database: the agent's user holds no write grant anywhere, and exactly one module writes production |
+| **Deciding what needs a person** | fixed rules, or review everything | each change gets a risk price (rows × uncertainty × kind of change, deletes weighing most), checked against per-tier limits and a hard delete cap; the confidence bar rises each time a reviewer rejects a change as a wrong match, too broad or short of evidence |
+| **Where the AI fits** | it makes the decision | it only advises on the pairs the SQL matchers disagree on, sees a comparison summary (never a name, email, phone, address or date) and never writes |
+| **What it assumes about the database** | untested | every database behaviour the design relies on (transactional DDL, rename rules, hashing) is checked on the live instance and signed; Drydock refuses to run without that proof |
+| **Afterwards** | logs, if anyone kept them | a downloadable audit log (who decided what, when, why, fingerprints before and after), the exact change set for sign-off, and each customer's lineage: which source record every field came from |
+
+Three ideas carry it:
+
+1. **Branch production for every AI change.** Exasol copies a table fast enough (about a second for the 36,600-row
+   customer table on a laptop) that a full, real copy per change can be the default instead of a special case.
+2. **Approve effects, not intentions.** The diff is measured in the database by hashing every row, so the review is of
+   what the SQL did, including side effects nobody predicted.
+3. **Every decision becomes evidence.** Approvals, rejections and undos are recorded under the reviewer's name, and
+   reviewers' decisions become case law the AI adjudicator is shown the next time a similar pair comes up.
+
+The write path is not specific to customers: it governs any table in the `GOLDEN` schema (keyed tables get row-level
+review, keyless ones whole-table). Customer reconciliation is the workload that demonstrates it.
+
+---
+
 ## Contents
 
-1. [How it works](#how-it-works)
-2. [Results on a live Exasol instance](#results-on-a-live-exasol-instance)
-3. [Getting started](#getting-started)
-4. [Using Drydock](#using-drydock)
-5. [Running the tests](#running-the-tests)
-6. [Deployment](#deployment)
-7. [Troubleshooting](#troubleshooting)
-8. [Project structure](#project-structure)
-9. [Built to be trusted](#built-to-be-trusted)
+1. [What's new about Drydock](#whats-new-about-drydock)
+2. [How it works](#how-it-works)
+3. [Results on a live Exasol instance](#results-on-a-live-exasol-instance)
+4. [Getting started](#getting-started)
+5. [Using Drydock](#using-drydock)
+6. [Using your own data](#using-your-own-data)
+7. [Reviewing, signing off and auditing](#reviewing-signing-off-and-auditing)
+8. [Running the tests](#running-the-tests)
+9. [Deployment](#deployment)
+10. [Troubleshooting](#troubleshooting)
+11. [Project structure](#project-structure)
+12. [Built to be trusted](#built-to-be-trusted)
 
 ---
 
@@ -97,6 +136,8 @@ and their companies.
   birth 30 years apart"*. It never sees names, emails, phones, addresses or dates. Its verdict is advice: those rows
   still wait for a person.
 
+The same pipeline runs on your own two files: see [Using your own data](#using-your-own-data).
+
 ![The Overview screen during a run](docs/images/overview.png)
 
 ---
@@ -133,7 +174,8 @@ held requests in the web interface.
 | Swap the merged table in | whole table | 15–35 ms |
 | Discard a branch | whole branch | about 35 ms |
 
-**Tests:** 38 live tests against Exasol, 293 offline Python tests and 19 web-interface tests.
+**Tests:** 38 live tests against Exasol (plus two new unmerge-order tests, `tests/test_live_unmerge.py`, awaiting
+their first live run), 348 offline Python tests and 28 web-interface tests.
 `scripts/probe_all.py` runs every SQL statement the product can issue against the instance (57 statements, 0 errors).
 
 ---
@@ -269,17 +311,21 @@ at the top.
    reason it was held.
 4. Open **Diff Viewer** to see every changed row side by side. Untick anything that looks wrong.
 5. Back on **Merge Gate**, click **MERGE N OF M**. To undo it, click **unmerge** on its card in the Diff Viewer.
+   Changes are undone newest-first, so the list only ever returns to a state that really existed.
+
+New to all this? Press **?** at the top right for a two-minute guided tour of every screen.
 
 ### The screens
 
 | Tab | What it's for |
 |---|---|
+| **Your Data** | what Drydock is working on, a "ready to run?" checklist, and loading your own two files |
 | **Overview** | progress of the current run and recent activity |
 | **Reconcile** | every candidate pair, with the matchers' votes and Gemini's verdict |
 | **Diff Viewer** | the exact rows a branch would change; tick or untick each one |
 | **Merge Gate** | requests waiting for you: **MERGE**, **REJECT** (with a reason, which becomes a precedent) or **DISCARD** |
-| **Runs** | the scoreboard: precision, recall, F1 and the gate's safety score |
-| **Database** | browse the instance: every schema and table, their columns and keys, and their rows a page at a time (read-only), plus GOLDEN's fingerprint history |
+| **Runs** | the scoreboard (demo data only: it needs the answer key), the run diary, and the audit log download |
+| **Database** | browse every table a page at a time (read-only), download any of them, and open one customer's full history |
 | **Live System** | the architecture, live, with what Exasol reports right now; **Refresh from Exasol** re-reads it |
 
 ### Next time
@@ -290,6 +336,50 @@ Open a terminal in the `DryDock` folder, set your secret word again (step 5, fir
 ```bash
 uv run python scripts/reset.py --wipe-precedents
 ```
+
+Stop Drydock (Ctrl+C) before a reset: the running server keeps the history it replays to browsers in memory.
+
+---
+
+## Using your own data
+
+Drydock works on any two customer lists, not just the demo. Open **Your Data** and follow the four steps:
+
+1. **Upload both files.** CSV, up to 50 MB and 300,000 rows each; from Excel use *File › Save As › CSV UTF-8*.
+   **System A** is the list you trust most (the clean list starts from it); **System B** is the list you want to
+   fold in. Comma, semicolon and tab separators and Windows encodings are detected for you.
+2. **Tell Drydock which column is which.** It suggests a mapping from the column names and the values (an unlabelled
+   column full of `@` is the email). Names can be one column or first and last. Dates are read in the format you
+   confirm, and when `03/04/1985` could be either way round, Drydock asks.
+3. **Check the data.** Every row is read with your choices, and nothing is loaded yet. You get a plain-language
+   report: duplicate or missing IDs (these must be fixed), bad emails and dates (left blank), values that were too
+   long, and contact details shared by many customers (an office line), which can make different people look alike.
+4. **Load it.** Both files are copied into Exasol (schema `UPLOADS`, never the demo's sources) and the uploaded
+   copies are deleted from the server. Then start a run: scripted mode, exactly as with the demo.
+
+No files to hand? Download the two sample files on the same screen. **Use the demo data instead** switches back at
+any time.
+
+What's different with your own data: there is no answer key, so runs are not scored, and your review is the check.
+Agent mode (Gemini planning) currently works on the demo data only; scripted mode runs the same matching, gate and
+review on yours.
+
+---
+
+## Reviewing, signing off and auditing
+
+| You want to… | Where |
+|---|---|
+| see every row a change would make before approving it, as a spreadsheet | **Merge Gate** or **Diff Viewer** › *Download changes (CSV)* |
+| record who approved what | click **Human reviewer** at the top right and enter your name; every decision is stored under it |
+| prove what happened | **Runs** › *Download audit log*: every request, the gate's reason, who decided, when, fingerprints before and after, and any undo |
+| know where one customer's details came from | **Database** › *Customer history* (or click a row of GOLDEN · CUSTOMERS): the source records, which system each field came from, why they were linked, every change |
+| take the result away | **Database** › *Download clean list*, or *CSV* on any table |
+
+**Sharing Drydock on a network.** Out of the box it answers anyone who can reach it, which is fine on your own
+laptop. Before other people can reach the machine, set `DRYDOCK_ACCESS_TOKEN` in `.env` to a long random value: the
+page then asks for it once, and every action, download and the live view need it. Anyone holding the token can
+approve changes, so share it like a password, and serve Drydock over HTTPS.
 
 ---
 
@@ -335,8 +425,10 @@ Exasol only through the two MCP servers. For full autonomous runs, use a Gemini 
 | `IDENTITY MISSING` or `cannot connect` | Is Exasol running? `exasol info` should say `running`. Check the passwords in `.env`. |
 | `DRYDOCK_VERIFY_KEY is not set` / `UNSIGNED-KEY-MISSING` | This terminal doesn't know your secret word. Run the first command of step 5 again. |
 | `required verification not PASS` | Run `uv run python scripts/verify.py` again (step 5). |
-| `address already in use` on port 8765 | Drydock is already running somewhere. Stop it with `lsof -ti :8765 \| xargs kill`. |
-| The page says **Orchestrator offline** | The terminal running step 8 was closed. Start it again. |
+| **Your Data** says the safety checks are *sealed with a different secret word* | The checks were signed with one word and the server was started with another. Stop the server, type your word **once**, run `uv run python scripts/verify.py --only V3,V4,V5,V6,V11`, then start the server **in that same terminal**. |
+| `address already in use` on port 8765 | Drydock is already running somewhere. Stop it with `kill $(lsof -ti tcp:8765 -sTCP:LISTEN)` (only the server: a plain `lsof -ti :8765` also lists your browser's connection). |
+| **unmerge** says *Undo the newer change first* | Changes are undone newest-first. Undo the one it names, then this one. |
+| The page says **Server offline** | The terminal running step 8 was closed. Start it again. |
 | **Refresh from Exasol** says "Not Found" | The orchestrator is an older copy. Stop it (Ctrl+C) and run step 8 again. |
 
 ---
@@ -358,11 +450,15 @@ drydock/            the governed write path
   mcp_server.py     the Drydock MCP server (the agent's write path)
   system.py         live Exasol metadata for the Live System view
   browse.py         the Database view's read-only table browser (SELECT only)
+  dataset.py        which dataset GOLDEN holds (the demo or your files) and switching between them
+  uploads.py        your own files: parsing, suggested column mapping, quality report, loading
+  export.py         downloads (clean list, change sets, audit log) and one customer's history (SELECT only)
   db.py, lintguard.py, catalogue.py   database access with a built-in SQL dialect firewall
 agent/              the Gemini planner loop and the scripted playbook
 bench/              synthetic data generator, source schemas and scoring
-sql/                DDL, grants and Exasol dialect evidence (DIALECT.md)
-scripts/            setup, verification, probing, reset, user creation
+sql/                DDL, grants and Exasol dialect evidence (DIALECT.md); 03_uploads.sql for your own data
+scripts/            setup, verification, probing, reset, user creation, sample files (make_samples.py)
+examples/           two small sample files for trying "Use your own data"
 tests/              offline tests and the live invariant suite
 ui/                 React + Vite + Tailwind web interface
 docs/               screenshots and diagrams
