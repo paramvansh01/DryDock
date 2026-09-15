@@ -17,8 +17,7 @@ exactly**.
 
 | | |
 |---|---|
-| **Demo video** | _coming soon_ |
-| **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](docs/pitch/Drydock-Pitch-Deck.pdf) · [speaker script](docs/pitch/script.md) |
+| **Pitch deck** | [docs/pitch/Drydock-Pitch-Deck.pdf](docs/pitch/Drydock-Pitch-Deck.pdf) |
 | **Run it yourself** | [Getting started](#getting-started) (about 20 minutes) |
 | **Source code** | [Project structure](#project-structure) |
 
@@ -106,7 +105,7 @@ and their companies.
 ## Results on a live Exasol instance
 
 Measured on Exasol Personal 2026.2 on a laptop: a scripted run with the gate on (tier 2), then a person reviewing the
-held requests in the UI.
+held requests in the web interface.
 
 **The matcher** (verdicts before any person looks):
 
@@ -135,8 +134,8 @@ held requests in the UI.
 | Swap the merged table in | whole table | 15–35 ms |
 | Discard a branch | whole branch | about 35 ms |
 
-**Tests:** 38 live tests against Exasol, 274 offline Python tests and 15 UI tests. `scripts/probe_all.py` runs every
-SQL statement the product can issue against the instance (57 statements, 0 errors).
+**Tests:** 38 live tests against Exasol, 293 offline Python tests and 19 web-interface tests.
+`scripts/probe_all.py` runs every SQL statement the product can issue against the instance (57 statements, 0 errors).
 
 ---
 
@@ -230,7 +229,8 @@ uv run python scripts/verify.py
 
 It asks Exasol questions such as "can a table be renamed inside a transaction?" and prints `PASS`, `FAIL` or
 `UNKNOWN` for each. Where an optional Exasol feature isn't installed (such as the in-database AI functions),
-Drydock automatically uses its alternative, so a few `FAIL` lines are normal. Keep this terminal window open: the next steps need the secret word too.
+Drydock automatically uses its alternative, so a few `FAIL` lines are normal. Keep this terminal window open:
+the next steps need the secret word too.
 
 ### Step 6: Load the demo data
 
@@ -317,8 +317,8 @@ The live tests and `probe_all.py` need the secret word from step 5 in the same t
 `EXA_CERT_FINGERPRINT` and set `EXA_TLS_NOCERTCHECK=0`. Then follow steps 4–8 as usual.
 
 **Orchestrator in Docker (optional):** `docker-compose.yml` runs the orchestrator in a container while Exasol runs
-elsewhere. Build the UI first (step 7), export your secret word, and set `EXA_DSN=host.docker.internal:8563` if Exasol
-runs on the same machine:
+elsewhere. Build the web interface first (step 7), export your secret word, and set
+`EXA_DSN=host.docker.internal:8563` if Exasol runs on the same machine:
 
 ```bash
 docker compose up
@@ -337,7 +337,6 @@ Exasol only through the two MCP servers. For full autonomous runs, use a Gemini 
 | `DRYDOCK_VERIFY_KEY is not set` / `UNSIGNED-KEY-MISSING` | This terminal doesn't know your secret word. Run the first command of step 5 again. |
 | `required verification not PASS` | Run `uv run python scripts/verify.py` again (step 5). |
 | `address already in use` on port 8765 | Drydock is already running somewhere. Stop it with `lsof -ti :8765 \| xargs kill`. |
-| Pairs show **AI unavailable** | Your Gemini key has used today's free requests. Those pairs wait for a person as usual; enable billing on the key for unlimited runs. |
 | The page says **Orchestrator offline** | The terminal running step 8 was closed. Start it again. |
 | **Refresh from Exasol** says "Not Found" | The orchestrator is an older copy. Stop it (Ctrl+C) and run step 8 again. |
 
@@ -367,7 +366,7 @@ sql/                DDL, grants and Exasol dialect evidence (DIALECT.md)
 scripts/            setup, verification, probing, reset, user creation
 tests/              offline tests and the live invariant suite
 ui/                 React + Vite + Tailwind web interface
-docs/               pitch deck, speaker script, screenshots
+docs/               pitch deck and screenshots
 ```
 
 ---
