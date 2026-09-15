@@ -1,7 +1,7 @@
 import { animate, motion, useMotionValue, useTransform } from "framer-motion";
 import { Check, CircleHelp, Sparkles, X } from "lucide-react";
-import { useEffect } from "react";
-import { adjudicatorInfo } from "./derive";
+import { useEffect, useState } from "react";
+import { adjudicatorInfo, explainError } from "./derive";
 
 export const fmt = (n: number | null | undefined) => (n == null ? "—" : n.toLocaleString("en-GB"));
 export const short = (fp: string | null | undefined) => (fp ? `${fp.slice(0, 4)}…${fp.slice(-4)}` : "—");
@@ -103,4 +103,64 @@ export function Verdict({ verdict, score, adjudicator, rationale }:
       )}
     </span>
   );
+}
+
+
+// ------------------------------------------------------------------ notifications
+// A quiet corner of the screen instead of the browser's blocking alert(). Anything can call toast().
+
+export type ToastTone = "good" | "bad" | "warn" | "info";
+export interface ToastItem { id: number; tone: ToastTone; title: string; body?: string; fix?: string }
+
+let toasts: ToastItem[] = [];
+let seq = 0;
+const listeners = new Set<(t: ToastItem[]) => void>();
+const publish = () => listeners.forEach((l) => l(toasts));
+
+export function toast(tone: ToastTone, title: string, body?: string, fix?: string): void {
+  const id = ++seq;
+  toasts = [...toasts, { id, tone, title, body, fix }].slice(-4);
+  publish();
+  setTimeout(() => dismiss(id), tone === "bad" ? 14000 : 6000);
+}
+
+export function dismiss(id: number): void {
+  toasts = toasts.filter((t) => t.id !== id);
+  publish();
+}
+
+const TOAST_TONE: Record<ToastTone, string> = {
+  good: "border-kelp/40", bad: "border-flare/50", warn: "border-brass/50", info: "border-tide/40",
+};
+const TOAST_DOT: Record<ToastTone, string> = { good: "bg-kelp", bad: "bg-flare", warn: "bg-brass", info: "bg-tide" };
+
+export function Toaster() {
+  const [items, setItems] = useState<ToastItem[]>(toasts);
+  useEffect(() => {
+    listeners.add(setItems);
+    return () => { listeners.delete(setItems); };
+  }, []);
+  return (
+    <div className="pointer-events-none fixed bottom-4 right-4 z-[70] flex w-[380px] max-w-[calc(100vw-2rem)] flex-col gap-2" role="status" aria-live="polite">
+      {items.map((t) => (
+        <div key={t.id} className={`pointer-events-auto card border-l-4 px-4 py-3 shadow-lg ${TOAST_TONE[t.tone]}`}>
+          <div className="flex items-start gap-2">
+            <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${TOAST_DOT[t.tone]}`} />
+            <div className="min-w-0 flex-1">
+              <div className="text-[13px] font-semibold text-fog">{t.title}</div>
+              {t.body && <div className="mt-0.5 text-[12.5px] leading-snug text-fog/80">{t.body}</div>}
+              {t.fix && <div className="mt-1.5 rounded-md bg-deck px-2 py-1.5 text-[12px] leading-snug text-fog"><b>How to fix: </b>{t.fix}</div>}
+            </div>
+            <button onClick={() => dismiss(t.id)} className="text-[16px] leading-none text-mist hover:text-fog" aria-label="Dismiss">×</button>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Show a failed action in plain language (with the fix, when there is one). */
+export function reportError(e: unknown): void {
+  const x = explainError(e instanceof Error ? e.message : String(e));
+  toast("bad", x.title, x.body, x.fix);
 }

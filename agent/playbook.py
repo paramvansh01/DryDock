@@ -15,7 +15,7 @@ import json
 import re
 from pathlib import Path
 
-from drydock import branch, diff, er, events, gate
+from drydock import branch, dataset, diff, er, events, gate
 from drydock.config import ROOT
 from drydock.db import Db, lit
 
@@ -50,6 +50,14 @@ BLOCKING = [
      "JOIN SOURCE_A.CUSTOMERS a2 ON a1.CUST_ID < a2.CUST_ID AND UPPER(TRIM(a1.ADDR_LINE)) = UPPER(TRIM(a2.ADDR_LINE)) "
      "AND a1.POSTCODE = a2.POSTCODE AND a1.DATE_OF_BIRTH = a2.DATE_OF_BIRTH"),
 ]
+
+
+def blocking(src: dataset.Dataset) -> list[tuple[str, str, str]]:
+    """BLOCKING pointed at a dataset's two tables. Uploaded files have the demo sources' exact columns,
+    so only the table names change."""
+    return [(kind, rule, sql.replace(dataset.DEMO.a, src.a).replace(dataset.DEMO.b, src.b))
+            for kind, rule, sql in BLOCKING]
+
 
 CONFIDENCE = {"EXACT_EMAIL": 0.99, "PHONE_ADDRESS": 0.97, "FUZZY_NAME": 0.80, "NEW_CUSTOMERS": 0.98,
               "INTERNAL_DEDUP": 0.90}
@@ -127,11 +135,14 @@ def end_run(db: Db, run_id: str) -> dict:
     from bench.score import score
     db.run(f"UPDATE DRYDOCK.RUNS SET ENDED_AT = CURRENT_TIMESTAMP WHERE RUN_ID = {lit(run_id)}")
     pending = gate.list_pending(db, include_resolved=True, run_id=run_id)
-    summary = {"merges": {str(m["MERGE_ID"]): m["DECISION"] for m in pending}}
-    try:
-        summary["metrics"] = score(db, run_id)
-    except Exception as e:  # scoring needs BENCH; report, never hide
-        summary["metrics_error"] = f"{type(e).__name__}: {e}"
+    summary: dict[str, object] = {"merges": {str(m["MERGE_ID"]): m["DECISION"] for m in pending}}
+    if not dataset.active(db).scored:
+        summary["metrics_error"] = "no answer key: scores exist for the demo data only (BENCH describes it)"
+    else:
+        try:
+            summary["metrics"] = score(db, run_id)
+        except Exception as e:  # scoring needs BENCH; report, never hide
+            summary["metrics_error"] = f"{type(e).__name__}: {e}"
     events.emit("run.ended", run_id, None, status="OK", summary=summary)
     return summary
 
@@ -152,7 +163,7 @@ def run_scripted(db: Db, run_id: str, *, tier: int = 2, gate_enabled: bool = Tru
 
     step("declare_mapping", lambda **k: {"mapping": er.declare_mapping(db, run_id, MAPPING, k["rationale"])},
          rationale="scripted mapping")
-    for kind, rule, sql in BLOCKING:
+    for kind, rule, sql in blocking(dataset.active(db)):
         step("stage_candidates", lambda **k: er.stage_candidates(db, run_id, k["rule"], k["select_sql"], k["kind"]),
              rule=rule, select_sql=sql, kind=kind)
     step("run_matching", lambda **k: er.run_matching(db, run_id))

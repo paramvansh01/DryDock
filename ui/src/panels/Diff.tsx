@@ -3,7 +3,7 @@ import { Scale, TriangleAlert } from "lucide-react";
 import { useMemo, useState } from "react";
 import { api } from "../api";
 import type { Branch, Card, Pair, Rec } from "../types";
-import { Chip, CountUp, Panel, PanelVotes, Verdict, fmt } from "../ui";
+import { Chip, CountUp, Panel, PanelVotes, Verdict, fmt, reportError } from "../ui";
 
 // Field alignment for the pair card is DERIVED from the mapping the agent declared
 // (mapping.declared): each golden field's expression is scanned for the SOURCE_B columns
@@ -128,7 +128,7 @@ function RowCard({ card, branch, mapping, canAct }: { card: Card; branch: Branch
     const keys = card.pair?.kind === "AA"
       ? branch.diff!.rows.filter((r) => r.pair?.pair_id === card.pair!.pair_id).map((r) => r.key)
       : [card.key];
-    try { await api.setRows(branch.id, keys, !approved); } catch (e) { alert(String(e)); }
+    try { await api.setRows(branch.id, keys, !approved); } catch (e) { reportError(e); }
     setBusy(false);
   };
   const classTone = card.class === "ADDED" ? "sky" : card.class === "DELETED" ? "flare" : "brass";

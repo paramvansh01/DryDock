@@ -361,6 +361,9 @@ export function SystemView({ s, canAct }: { s: State; canAct: boolean }) {
   }, [s.recent]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const snap = s.system.snapshot;
+  // The two input tables of the active dataset: the demo's, or a person's own files in UPLOADS.
+  const srcA = snap?.config.dataset?.tables.a ?? "SOURCE_A.CUSTOMERS";
+  const srcB = snap?.config.dataset?.tables.b ?? "SOURCE_B.CLIENTS";
   const ctlRows = controlRows(snap);
   const cfg = snap?.config;
   useEffect(() => {
@@ -438,7 +441,7 @@ export function SystemView({ s, canAct }: { s: State; canAct: boolean }) {
             <div className={`absolute rounded-[22px] border ${hot.exasol ? "border-tide/40" : "border-[#d7e0ec]"} transition-colors duration-700`}
               style={{ left: R.exasol.x, top: R.exasol.y, width: R.exasol.w, height: R.exasol.h,
                 background: "linear-gradient(180deg, rgba(239,246,255,.85) 0%, rgba(255,255,255,.92) 22%, rgba(255,255,255,.92) 100%)" }}>
-              <button onClick={() => setSel({ kind: "node", id: "exasol" })} className="flex w-full items-center gap-3 px-6 pt-4 text-left">
+              <button onClick={() => setSel({ kind: "node", id: "exasol" })} data-tour="system-exasol" className="flex w-full items-center gap-3 px-6 pt-4 text-left">
                 <IconTile icon={Database} color={C.ctl} size={34} />
                 <div className="leading-tight">
                   <div className="text-[15px] font-bold tracking-tight text-fog">Exasol</div>
@@ -509,10 +512,10 @@ export function SystemView({ s, canAct }: { s: State; canAct: boolean }) {
               onClick={() => setSel({ kind: "node", id: "erwork" })} />
             <ControlCard r={R.control} hot={hot.control} hotRows={hotRows} list={ctlRows} rows={(t) => rows(`DRYDOCK.${t}`)}
               onRow={(t) => setSel({ kind: "table", fq: `DRYDOCK.${t}` })} onClick={() => setSel({ kind: "node", id: "control" })} />
-            <TableCard r={R.srcA} hot={hot.srcA} icon={Table2} color={C.rows} fq="SOURCE_A.CUSTOMERS" note="read-only"
-              rows={rows("SOURCE_A.CUSTOMERS")} cols={cols("SOURCE_A.CUSTOMERS")} keys={keysOf(snap, "SOURCE_A.CUSTOMERS")} onClick={() => setSel({ kind: "table", fq: "SOURCE_A.CUSTOMERS" })} />
-            <TableCard r={R.srcB} hot={hot.srcB} icon={Table2} color={C.ai} fq="SOURCE_B.CLIENTS" note="read-only"
-              rows={rows("SOURCE_B.CLIENTS")} cols={cols("SOURCE_B.CLIENTS")} keys={keysOf(snap, "SOURCE_B.CLIENTS")} onClick={() => setSel({ kind: "table", fq: "SOURCE_B.CLIENTS" })} />
+            <TableCard r={R.srcA} hot={hot.srcA} icon={Table2} color={C.rows} fq={srcA} note="System A · read-only"
+              rows={rows(srcA)} cols={cols(srcA)} keys={keysOf(snap, srcA)} onClick={() => setSel({ kind: "table", fq: srcA })} />
+            <TableCard r={R.srcB} hot={hot.srcB} icon={Table2} color={C.ai} fq={srcB} note="System B · read-only"
+              rows={rows(srcB)} cols={cols(srcB)} keys={keysOf(snap, srcB)} onClick={() => setSel({ kind: "table", fq: srcB })} />
             <ListCard r={R.bench} hot={hot.bench} icon={Lock} color={C.bad} schema="BENCH" title="Answer key · sealed"
               badge="no agent access" items={(snap?.tables ?? []).filter((t) => t.schema === "BENCH").map((t) => ({ name: t.table, rows: t.rows }))}
               empty="—" onClick={() => setSel({ kind: "node", id: "bench" })} muted />
@@ -910,11 +913,15 @@ const ABOUT: Record<string, { title: string; icon: React.ElementType; color: str
 function Inspector({ sel, s, onClose, rows, cols }:
   { sel: NonNullable<Sel>; s: State; onClose: () => void; rows: (fq: string) => number | null; cols: (fq: string) => [string, string][] }) {
   const snap = s.system.snapshot;
+  // The two input tables of the active dataset: the demo's, or a person's own files in UPLOADS.
+  const srcA = snap?.config.dataset?.tables.a ?? "SOURCE_A.CUSTOMERS";
+  const srcB = snap?.config.dataset?.tables.b ?? "SOURCE_B.CLIENTS";
   const fq = sel.kind === "table" ? sel.fq : null;
   const nodeId = sel.kind === "node" ? sel.id : fq?.startsWith("DRYDOCK.") ? "control" : fq?.startsWith("GOLDEN") ? "golden"
-    : fq?.startsWith("SOURCE_A") ? "srcA" : fq?.startsWith("SOURCE_B") ? "srcB" : "exasol";
+    : fq === srcA || fq?.startsWith("SOURCE_A") ? "srcA" : fq === srcB || fq?.startsWith("SOURCE_B") ? "srcB" : "exasol";
   const tableText = !fq ? null
     : fq.startsWith("GOLDEN") ? "Production. Written only by drydock/merge.py: stage a copy, check its fingerprint against the expected one, then swap it in with two RENAMEs in one transaction. The agent reads it only through the GOLDEN_V view."
+    : fq.startsWith("UPLOADS") ? "One of your own two files, loaded from the Your Data tab. Branches may read it and never write it."
     : fq.startsWith("SOURCE") ? "An input system, owned by the admin and read-only to everyone. The agent reads it through the official Exasol MCP server."
     : fq.startsWith("DRYDOCK.") ? ABOUT.control.text : ABOUT.exasol.text;
   const about = fq ? { title: fq, icon: fq.startsWith("GOLDEN") ? Gem : fq.startsWith("DRYDOCK.") ? Settings2 : Table2,

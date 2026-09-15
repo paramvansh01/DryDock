@@ -21,7 +21,7 @@ from .db import Db, ident, lit, qname
 
 # Browsable schemas. BENCH is the answer key: readable by a person here (as the scorer already
 # is), never by the agent, which holds no grant on it.
-SCHEMAS = ("SOURCE_A", "SOURCE_B", "GOLDEN", "GOLDEN_V", "DRYDOCK", "ER_WORK", "BENCH")
+SCHEMAS = ("SOURCE_A", "SOURCE_B", "UPLOADS", "GOLDEN", "GOLDEN_V", "DRYDOCK", "ER_WORK", "BENCH")
 BRANCH_SCHEMA = re.compile(r"^BR_[0-9A-Z]+$")
 
 MAX_LIMIT = 500

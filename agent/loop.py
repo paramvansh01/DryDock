@@ -220,6 +220,13 @@ async def _call(sessions, route, run_id: str, name: str, args: dict) -> tuple[st
 
 
 def run(run_id: str, tier: int = 2, gate_enabled: bool = True, seed: int = 20260913) -> dict:
+    from drydock import dataset
+    from drydock.db import get
+    if not dataset.active(get("svc")).agent:
+        # The agent reads sources through the official Exasol MCP server, whose grants and schema filter
+        # (SETTINGS.mcp_schema_pattern) cover the demo sources only. Refuse rather than plan against the wrong tables.
+        raise ValueError("Agent mode works on the demo data only for now. For your own files, choose "
+                         "'scripted' mode: the same matching, gate and review, with a fixed plan.")
     return asyncio.run(_run(run_id, tier, gate_enabled, seed))
 
 

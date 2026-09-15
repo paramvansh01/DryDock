@@ -1,11 +1,12 @@
-"""One command, under 10 seconds: restore GOLDEN from the seed snapshot and clear run state.
+"""One command, under 10 seconds: restore GOLDEN from the active dataset's snapshot and clear run state.
 
     ./scripts/reset.sh                   # keep PRECEDENTS (case law persists across takes)
     ./scripts/reset.sh --wipe-precedents
 
 Drops every BR_* schema, every GOLDEN table (including __ARCH_/__NEW_/__UNDONE_),
-every ER_WORK table; recreates GOLDEN.CUSTOMERS from BENCH.GOLDEN_CLEAN and
-re-applies sql/02_grants.sql. Never touches SOURCE_A, SOURCE_B or BENCH.
+every ER_WORK table; recreates GOLDEN.CUSTOMERS from the active dataset's starting
+snapshot (BENCH.GOLDEN_CLEAN for the demo, UPLOADS.GOLDEN_SEED for uploaded files)
+and re-applies sql/02_grants.sql. Never touches SOURCE_A, SOURCE_B, UPLOADS or BENCH.
 """
 
 from __future__ import annotations
@@ -21,28 +22,22 @@ sys.path.insert(0, str(ROOT / "scripts"))
 
 from _common import split_sql  # noqa: E402
 
-from drydock.db import Db, lit  # noqa: E402
+from drydock import dataset, merge  # noqa: E402
+from drydock.db import Db  # noqa: E402
 
-RUN_TABLES = ("BRANCHES", "MATERIALISATIONS", "BRANCH_OPS", "DIFFS", "DIFF_ROWS", "BASE_HASHES", "MERGES",
-              "ADJUDICATIONS", "RUNS", "CANDIDATES", "CANDIDATES_RAW", "MAPPINGS", "EVENTS", "IDEMPOTENCY")
+RUN_TABLES = dataset.RUN_TABLES
 
 
 def reset(db: Db, wipe_precedents: bool = False) -> dict:
     t0 = time.perf_counter()
-    dropped = []
-    for (s,) in db.rows("SELECT SCHEMA_NAME FROM EXA_ALL_SCHEMAS WHERE SCHEMA_NAME LIKE 'BR!_%' ESCAPE '!'"):
-        db.run(f"DROP SCHEMA {s} CASCADE")
-        dropped.append(s)
-    for schema in ("GOLDEN", "ER_WORK"):
-        for (t,) in db.rows(f"SELECT TABLE_NAME FROM EXA_ALL_TABLES WHERE TABLE_SCHEMA = {lit(schema)}"):
-            db.run(f"DROP TABLE {schema}.{t}")
-    db.run("CREATE TABLE GOLDEN.CUSTOMERS AS SELECT * FROM BENCH.GOLDEN_CLEAN")
+    ds = dataset.active(db)
+    dropped = dataset.clear_run_state(db, wipe_precedents)
+    merge.reseed(db, ds.seed)
     for stmt in split_sql((ROOT / "sql" / "02_grants.sql").read_text()):
         db.run(stmt)
-    for t in RUN_TABLES + (("PRECEDENTS",) if wipe_precedents else ()):
-        db.run(f"DELETE FROM DRYDOCK.{t}")
     rows = int(db.scalar("SELECT COUNT(*) FROM GOLDEN.CUSTOMERS"))
-    return {"golden_rows": rows, "branches_dropped": len(dropped), "seconds": round(time.perf_counter() - t0, 2)}
+    return {"dataset": ds.name, "golden_rows": rows, "branches_dropped": dropped,
+            "seconds": round(time.perf_counter() - t0, 2)}
 
 
 def main() -> int:

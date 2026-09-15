@@ -8,11 +8,14 @@ from __future__ import annotations
 
 import time
 
+from . import dataset
 from .config import SETTINGS
 from .db import Db
 
-SCHEMAS = ("SOURCE_A", "SOURCE_B", "GOLDEN", "GOLDEN_V", "DRYDOCK", "ER_WORK", "BENCH")
-COLUMN_SCHEMAS = ("SOURCE_A", "SOURCE_B", "GOLDEN", "GOLDEN_V", "DRYDOCK", "BENCH")
+SCHEMAS = ("SOURCE_A", "SOURCE_B", "UPLOADS", "GOLDEN", "GOLDEN_V", "DRYDOCK", "ER_WORK", "BENCH")
+COLUMN_SCHEMAS = ("SOURCE_A", "SOURCE_B", "UPLOADS", "GOLDEN", "GOLDEN_V", "DRYDOCK", "BENCH")
+# The verified facts a scripted run depends on (require_verified / require_answered in branch, diff, er, merge).
+RUN_CHECKS = ("V3", "V4", "V5", "V6", "V11")
 
 
 def snapshot(db: Db, trigger: str) -> dict:
@@ -21,14 +24,14 @@ def snapshot(db: Db, trigger: str) -> dict:
     version = db.scalar("SELECT PARAM_VALUE FROM EXA_METADATA WHERE PARAM_NAME = 'databaseProductVersion'")
     tables = [{"schema": s, "table": t, "rows": int(n or 0), "kind": "TABLE"} for s, t, n in db.rows(
         "SELECT TABLE_SCHEMA, TABLE_NAME, TABLE_ROW_COUNT FROM EXA_ALL_TABLES "
-        "WHERE TABLE_SCHEMA IN ('SOURCE_A', 'SOURCE_B', 'GOLDEN', 'DRYDOCK', 'ER_WORK', 'BENCH') "
+        "WHERE TABLE_SCHEMA IN ('SOURCE_A', 'SOURCE_B', 'UPLOADS', 'GOLDEN', 'DRYDOCK', 'ER_WORK', 'BENCH') "
         "OR TABLE_SCHEMA LIKE 'BR!_%' ESCAPE '!' ORDER BY TABLE_SCHEMA, TABLE_NAME")]
     tables += [{"schema": s, "table": v, "rows": None, "kind": "VIEW"} for s, v in db.rows(
         "SELECT VIEW_SCHEMA, VIEW_NAME FROM EXA_ALL_VIEWS WHERE VIEW_SCHEMA = 'GOLDEN_V'")]
     columns: dict[str, list] = {}
     for s, t, c, typ in db.rows(
             "SELECT COLUMN_SCHEMA, COLUMN_TABLE, COLUMN_NAME, COLUMN_TYPE FROM EXA_ALL_COLUMNS "
-            "WHERE COLUMN_SCHEMA IN ('SOURCE_A', 'SOURCE_B', 'GOLDEN', 'GOLDEN_V', 'DRYDOCK', 'BENCH') "
+            "WHERE COLUMN_SCHEMA IN ('SOURCE_A', 'SOURCE_B', 'UPLOADS', 'GOLDEN', 'GOLDEN_V', 'DRYDOCK', 'BENCH') "
             "ORDER BY COLUMN_SCHEMA, COLUMN_TABLE, COLUMN_ORDINAL_POSITION"):
         if "__" in t:                      # GOLDEN's __ARCH_/__NEW_ copies repeat CUSTOMERS' columns
             continue
@@ -47,7 +50,20 @@ def snapshot(db: Db, trigger: str) -> dict:
         "SELECT TIER, LABEL, MAX_CHANGED, MAX_RISK, ALLOW_DELETES, MAX_DELETE_PCT FROM DRYDOCK.TIER_CONFIG ORDER BY TIER")]
     config = {"tiers": tiers, "planner_model": SETTINGS.planner_model, "adjudicator_model": SETTINGS.adjudicator_model,
               "adjudicator_rung": SETTINGS.adjudicator_rung, "mcp_row_limit": SETTINGS.mcp_row_limit,
-              "mcp_schema_pattern": SETTINGS.mcp_schema_pattern}
+              "mcp_schema_pattern": SETTINGS.mcp_schema_pattern,
+              "dataset": dataset.info(db), "readiness": readiness()}
     return {"db_time": str(db_time), "session": str(session), "version": str(version), "tables": tables,
             "columns": columns, "keys": keys, "config": config,
             "ms": round((time.perf_counter() - t0) * 1000, 1), "trigger": trigger}
+
+
+def readiness() -> dict:
+    """What a person needs before a run can work, checked the way the run itself checks it. The UI turns
+    this into a plain-language checklist, with the fix for each problem."""
+    import os
+
+    from .config import verified_status
+    checks = {c: verified_status(c) for c in RUN_CHECKS}
+    return {"checks": checks, "checks_ok": all(v == "PASS" for v in checks.values()),
+            "gemini_key": bool(os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")),
+            "adjudicator": SETTINGS.adjudicator_rung}

@@ -1,8 +1,10 @@
 import { motion } from "framer-motion";
 import { useState } from "react";
-import { REJECT_CODES, api } from "../api";
+import { Download } from "lucide-react";
+import { REJECT_CODES, api, downloads } from "../api";
 import type { Branch } from "../types";
-import { Chip, fmt } from "../ui";
+import { explainReason } from "../derive";
+import { Chip, fmt, reportError, toast } from "../ui";
 
 // The gate as a bar. The x-axis is ROWS. The threshold line is how many changed rows
 // THIS confidence can buy: min(MAX_CHANGED, MAX_RISK / ((1 - confidence) · kind_weight)).
@@ -39,7 +41,7 @@ export function Gate({ branch, canAct }: { branch: Branch | null; canAct: boolea
   const tone = branch.status === "MERGED" || g.decision === "MERGE" ? "bg-kelp" : g.decision === "PENDING" ? "bg-brass" : "bg-flare";
   const act = async (f: () => Promise<unknown>) => {
     setBusy(true);
-    try { await f(); } catch (e) { alert(String(e)); }
+    try { await f(); } catch (e) { reportError(e); }
     setBusy(false);
   };
   const pending = branch.status === "PENDING";
@@ -74,11 +76,16 @@ export function Gate({ branch, canAct }: { branch: Branch | null; canAct: boolea
           </>
         )}
       </div>
-      <div className="mt-1 text-xs text-fog">{g.reason}{branch.selfcheck?.discrepancy ? <span className="ml-2 text-brass">· agent lowered its own confidence</span> : null}</div>
+      <div className="mt-1 text-xs text-fog"><span className="font-mono text-mist">{g.reason}</span>
+        {explainReason(g.reason) !== g.reason && <span className="ml-1.5">{explainReason(g.reason)}</span>}{branch.selfcheck?.discrepancy ? <span className="ml-2 text-brass">· agent lowered its own confidence</span> : null}</div>
       <div className="mt-1.5 flex flex-wrap items-center gap-2">
         {pending && (
           <>
-            <button disabled={!canAct || busy} onClick={() => act(() => api.approve(g.merge_id))}
+            <button disabled={!canAct || busy} data-tour="merge-button" onClick={() => act(async () => {
+              const out = await api.approve(g.merge_id);
+              if (out.decision === "BLOCKED") toast("warn", "Not merged", explainReason(out.block_reason));
+              else toast("good", `Merged ${fmt(out.rows_applied)} rows into GOLDEN`, "Staged, fingerprint-checked and swapped in. You can undo it from the Diff Viewer.");
+            })}
               className="rounded bg-tide px-3 py-1.5 text-sm font-semibold text-ink disabled:opacity-40">
               MERGE {fmt(approvedCount)} OF {fmt(total)}
             </button>
@@ -95,6 +102,13 @@ export function Gate({ branch, canAct }: { branch: Branch | null; canAct: boolea
             merged {fmt(branch.applied.rows_applied)} of {fmt(branch.applied.rows_applied + branch.applied.rows_excluded)} ·
             stage {Math.round(branch.applied.stage_ms)} ms · swap {Math.round(branch.applied.swap_ms)} ms
           </span>
+        )}
+        {branch.diff && (
+          <a href={downloads.changes(branch.id)} data-tour="download-changes"
+            title="Every row this change touches, whether it is included, and the values before and after: for sign-off before you approve"
+            className="ml-auto flex items-center gap-1.5 rounded border border-rule px-3 py-1.5 text-sm text-fog hover:border-tide hover:text-tide">
+            <Download className="h-3.5 w-3.5" /> Download changes (CSV)
+          </a>
         )}
         {!canAct && <span className="text-xs text-mist">read-only (replay)</span>}
       </div>

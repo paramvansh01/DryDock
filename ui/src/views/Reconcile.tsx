@@ -5,7 +5,7 @@ import { api } from "../api";
 import { type FilterKey, type MatchRow, type SortKey, FIELD_LABEL, compareFields, filterSort, matchRows,
   signalChips, sideValue } from "../derive";
 import type { State } from "../types";
-import { PanelVotes, Verdict } from "../ui";
+import { PanelVotes, Verdict, reportError } from "../ui";
 
 const RISK_CLS = { High: "bg-flare/10 text-flare", Medium: "bg-brass/10 text-brass", Low: "bg-kelp/10 text-kelp" };
 const SUG_CLS = { Match: "bg-kelp/10 text-kelp", Review: "bg-brass/10 text-brass", "No match": "bg-flare/10 text-flare" };
@@ -57,7 +57,7 @@ export function Reconcile({ s, canAct, onOpenDiff }: { s: State; canAct: boolean
     for (const r of items) byBranch.set(r.branchId, [...(byBranch.get(r.branchId) ?? []), r.key]);
     try {
       for (const [bid, keys] of byBranch) await api.setRows(bid, keys, approved);
-    } catch (e) { alert(String(e)); }
+    } catch (e) { reportError(e); }
     setBusy(false);
   };
   const editable = (r: MatchRow) => canAct && r.branchStatus === "PENDING";
@@ -65,7 +65,7 @@ export function Reconcile({ s, canAct, onOpenDiff }: { s: State; canAct: boolean
   return (
     <div className="grid grid-cols-[minmax(0,1fr)_420px] gap-4">
       {/* ---------------- table */}
-      <section className="card flex min-w-0 flex-col">
+      <section className="card flex min-w-0 flex-col" data-tour="candidates">
         <header className="flex items-start justify-between gap-4 px-5 pb-3 pt-4">
           <div className="flex items-start gap-3">
             <ListChecks className="mt-0.5 h-6 w-6 text-navy" />
@@ -113,8 +113,8 @@ export function Reconcile({ s, canAct, onOpenDiff }: { s: State; canAct: boolean
                   checked={shown.length > 0 && shown.every((r) => sel.has(r.key))}
                   onChange={(e) => setSel((p) => { const n = new Set(p); shown.forEach((r) => (e.target.checked ? n.add(r.key) : n.delete(r.key))); return n; })} /></th>
                 <th className="px-2 font-medium">#</th>
-                <th className="px-2 font-medium">SOURCE_A</th>
-                <th className="px-2 font-medium">SOURCE_B</th>
+                <th className="px-2 font-medium">System A</th>
+                <th className="px-2 font-medium">System B</th>
                 <th className="px-2 font-medium">Match Score</th>
                 <th className="px-2 font-medium">Suggested</th>
                 <th className="px-2 font-medium" title="High: matchers split or cluster > 2 · Medium: unanimous with a conflict signal or score < 0.90 · Low: unanimous, clean">Risk</th>
@@ -266,7 +266,7 @@ function PairDetail({ s, row, idx, total, busy, editable, onPrev, onNext, onClos
             <div key={sd} className="overflow-hidden rounded-lg border border-rule">
               <div className={`flex items-center gap-2 px-3 py-2 text-[13px] font-semibold ${sd === "a" ? "bg-tide/5 text-fog" : "bg-sky/5 text-fog"}`}>
                 <Database className={`h-4 w-4 ${sd === "a" ? "text-tide" : "text-sky"}`} />
-                {sd === "a" ? "SOURCE_A" : p.kind === "AA" ? "SOURCE_A (duplicate)" : "SOURCE_B"}
+                {sd === "a" ? "System A" : p.kind === "AA" ? "System A (duplicate)" : "System B"}
               </div>
               <dl className="grid grid-cols-[50px_minmax(0,1fr)] gap-x-2 gap-y-1.5 px-3 py-2.5 text-[12px]">
                 {rows.map(([label, get]) => {

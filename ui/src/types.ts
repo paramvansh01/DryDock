@@ -122,7 +122,7 @@ export interface RunInfo {
   minConfidence: number;
   planFrom: string | null;
   startedAt: string;
-  ended?: { status: string };
+  ended?: { status: string; error?: string | null };
 }
 
 export interface SnapTable { schema: string; table: string; rows: number | null; kind: "TABLE" | "VIEW" }
@@ -133,7 +133,8 @@ export interface Snapshot {
   columns: Record<string, [string, string][]>; ms: number; trigger: string; ts: string;
   keys: { schema: string; table: string; column: string; kind: string; ref: string | null }[];
   config: { tiers: { tier: number; label: string; max_changed: number; max_risk: number; allow_deletes: boolean; max_delete_pct: number }[];
-            planner_model: string; adjudicator_model: string; adjudicator_rung: string; mcp_row_limit: number; mcp_schema_pattern: string };
+            planner_model: string; adjudicator_model: string; adjudicator_rung: string; mcp_row_limit: number; mcp_schema_pattern: string;
+            dataset?: DatasetInfo; readiness?: Readiness };
 }
 
 /** GET /db/rows: one page of a table, read from Exasol when the Database view asked for it.
@@ -169,4 +170,50 @@ export interface State {
   events: number;
   system: { snapshot: Snapshot | null };
   recent: DrydockEvent[];   // the last 40 events (not db.snapshot), for the System view's live flows and log
+}
+
+/** Which dataset GOLDEN holds (drydock/dataset.py info()), carried on every db.snapshot. */
+export interface DatasetInfo {
+  name: string;                         // "demo" | "upload"
+  label: string;
+  rows_a: number; rows_b: number;
+  activated_at: string | null;
+  scored: boolean;                      // an answer key exists (the demo only)
+  agent: boolean;                       // agent mode can plan over it (the demo only, for now)
+  tables: { a: string; b: string };
+  files?: { a: string; b: string } | null;
+  quality?: Record<string, any> | null;
+}
+
+/** What a run needs, checked the way a run checks it (drydock/system.py readiness()). */
+export interface Readiness {
+  checks: Record<string, string>;       // V3..V11 -> PASS | FAIL | UNKNOWN | TAMPERED | UNSIGNED-KEY-MISSING
+  checks_ok: boolean;
+  gemini_key: boolean;
+  adjudicator: string;
+}
+
+// ------------------------------------------------------------------ your own data (REST, not events)
+
+export interface FieldDef { key: string; label: string; help: string }
+export interface DateGuess { format: string; label: string; ambiguous: boolean; options: { format: string; label: string }[] }
+export interface ColumnProfile { name: string; filled: number; unique: number; samples: string[]; kind: string; date: DateGuess | null }
+export interface FileProfile {
+  filename: string; encoding: string; delimiter: string; rows: number; ragged: number;
+  columns: ColumnProfile[]; suggested: Record<string, string | null>; preview: string[][]; fields: FieldDef[];
+}
+export interface Issue { code: string; level: "error" | "warning" | "info"; message: string; count: number; examples: { row: number | null; value: string | null }[] }
+export interface SideReport { side: string; filename: string; rows: number; loaded: number; filled: Record<string, number>; issues: Issue[]; errors: number; can_load: boolean; sample: (string | null)[][] }
+export interface QualityReport { a: SideReport; b: SideReport; overlap: { shared_emails: number; shared_phones: number }; can_load: boolean }
+export interface SideMapping { fields: Record<string, string | null>; formats: Record<string, string | null> }
+
+export interface CustomerHistory {
+  golden_id: string; exists: boolean; dataset: string;
+  record: Record<string, string | null> | null;
+  survivorship: Record<string, string> | null;
+  sources: { system: string; id: string; record: Record<string, string | null> }[];
+  evidence: Record<string, string | null>[];
+  changes: { branch: string; change: string; kind: string; run: string; included: boolean; default_reason: string | null;
+             columns: string[]; merge_id: number | null; decision: string | null; decided_at: string | null;
+             decided_by: string | null; undone_at: string | null; reject_code: string | null }[];
 }

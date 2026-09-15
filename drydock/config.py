@@ -119,6 +119,15 @@ class Settings:
     adjudicator_thinking: str = field(default_factory=lambda: os.environ.get("DRYDOCK_ADJ_THINKING", "MEDIUM"))
     adjudicator_rung: str = field(default_factory=lambda: os.environ.get("DRYDOCK_ADJUDICATOR", "gemini_fallback"))
     adj_batch: int = field(default_factory=lambda: _i("DRYDOCK_ADJ_BATCH", 150))
+    # Gemini calls: how long one request may take, and how many attempts on a transient error (429/5xx).
+    # The SDK's own default backs off for well over a minute on a 503, and a run sits silent meanwhile;
+    # after these attempts the adjudicator leaves its pairs for a person instead.
+    llm_timeout_s: int = field(default_factory=lambda: _i("DRYDOCK_LLM_TIMEOUT_S", 120))
+    llm_attempts: int = field(default_factory=lambda: _i("DRYDOCK_LLM_ATTEMPTS", 3))
+    # Optional shared access token. Set, every API call, download and the live stream need it (the browser keeps
+    # it in a same-site cookie after asking once). Unset, Drydock is open to whoever can reach it: fine on
+    # localhost, not on a network.
+    access_token: str = field(default_factory=lambda: os.environ.get("DRYDOCK_ACCESS_TOKEN", "").strip())
     # What the official Exasol MCP server exposes to the agent (agent/loop.py passes these; the UI shows them).
     mcp_row_limit: int = field(default_factory=lambda: _i("DRYDOCK_MCP_ROW_LIMIT", 50))
     mcp_schema_pattern: str = "^(SOURCE_A|SOURCE_B|GOLDEN_V)$"

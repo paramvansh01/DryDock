@@ -1,4 +1,5 @@
-import { GitBranch, ShieldCheck } from "lucide-react";
+import { Download, GitBranch, ShieldCheck } from "lucide-react";
+import { downloads } from "../api";
 import { Diff } from "../panels/Diff";
 import { Gate } from "../panels/Gate";
 import { Narrative } from "../panels/Narrative";
@@ -24,9 +25,17 @@ export function DiffView({ s, branch, canAct, replay, onFocus }: {
 }) {
   return (
     <div className="space-y-4">
-      <Title icon={GitBranch} title="Diff Viewer" sub="The exact row-level change a branch would make to GOLDEN — observed in the database, not estimated." />
-      <div className="card overflow-hidden"><Strip s={s} focus={branch?.id ?? null} onFocus={onFocus} canAct={canAct} /></div>
-      <div className="h-[calc(100vh-330px)] min-h-[480px]"><Diff branch={branch} mapping={s.mapping} canAct={canAct} replay={replay} /></div>
+      <div className="flex items-start gap-3">
+        <Title icon={GitBranch} title="Diff Viewer" sub="The exact row-level change a branch would make to GOLDEN — observed in the database, not estimated. Click a card to see its rows." />
+        {branch?.diff && !replay && (
+          <a href={downloads.changes(branch.id)} title="Every row this branch touches, whether it is included, and the values now and in the branch"
+            className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg border border-rule bg-hull px-3.5 py-2 text-[12.5px] text-fog hover:border-tide hover:text-tide">
+            <Download className="h-4 w-4" /> Download these changes (CSV)
+          </a>
+        )}
+      </div>
+      <div className="card overflow-hidden" data-tour="branches-strip"><Strip s={s} focus={branch?.id ?? null} onFocus={onFocus} canAct={canAct} /></div>
+      <div className="h-[calc(100vh-330px)] min-h-[480px]" data-tour="diff-panel"><Diff branch={branch} mapping={s.mapping} canAct={canAct} replay={replay} /></div>
     </div>
   );
 }
@@ -37,7 +46,7 @@ export function GateView({ s, branch, canAct, onFocus }: { s: State; branch: Bra
     <div className="space-y-4">
       <Title icon={ShieldCheck} title="Merge Gate" sub="Every merge request is weighed against the tier's limits. Held requests wait here for a person." />
       <div className="grid grid-cols-[380px_1fr] gap-4">
-        <section className="card overflow-hidden">
+        <section className="card overflow-hidden" data-tour="gate-list">
           <div className="border-b border-rule px-4 py-3 text-[13px] font-semibold text-fog">Merge requests ({gated.length})</div>
           <ul>
             {gated.length === 0 && <li className="px-4 py-6 text-[13px] text-mist">No merge requests yet.</li>}
@@ -55,7 +64,7 @@ export function GateView({ s, branch, canAct, onFocus }: { s: State; branch: Bra
             ))}
           </ul>
         </section>
-        <div className="space-y-4">
+        <div className="space-y-4" data-tour="gate-panel">
           <Gate branch={branch} canAct={canAct} />
           {branch?.request && (
             <section className="card px-5 py-4 text-[13px]">
@@ -74,7 +83,14 @@ export function RunsView({ s, onFocus }: { s: State; onFocus: (id: string) => vo
   const runs = Object.values(s.runs);
   return (
     <div className="space-y-4">
-      <Title icon={GitBranch} title="Runs" sub="Every run, its A/B scores, and the agent's full narrative." />
+      <div className="flex items-start gap-3">
+        <Title icon={GitBranch} title="Runs" sub="Every run, its A/B scores, and the agent's full narrative." />
+        <a href={downloads.audit} data-tour="audit-download"
+          title="Every merge request: who asked, what the gate decided and why, who approved or rejected it and when, fingerprints before and after, and any undo"
+          className="ml-auto flex shrink-0 items-center gap-1.5 rounded-lg bg-navy px-3.5 py-2 text-[12.5px] font-semibold text-white shadow-sm">
+          <Download className="h-4 w-4" /> Download audit log (CSV)
+        </a>
+      </div>
       <div className="grid grid-cols-[1fr_1fr] gap-4">
         <div className="space-y-4">
           <section className="card overflow-hidden">
@@ -95,7 +111,7 @@ export function RunsView({ s, onFocus }: { s: State; onFocus: (id: string) => vo
               </tbody>
             </table>
           </section>
-          <Score s={s} />
+          <div data-tour="scoreboard"><Score s={s} /></div>
         </div>
         <div className="h-[calc(100vh-240px)] min-h-[480px]"><Narrative s={s} onFocus={onFocus} /></div>
       </div>

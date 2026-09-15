@@ -2,7 +2,7 @@
 
     uv run python scripts/setup.py --seed 20260913
 
-  1. svc    sql/00_schemas.sql, sql/01_drydock_ddl.sql
+  1. svc    sql/00_schemas.sql, sql/01_drydock_ddl.sql, sql/03_uploads.sql
   2. admin  bench/sql/10_sources.sql + synthetic data (bench/generate.py)
   3. svc    reset: GOLDEN.CUSTOMERS from BENCH.GOLDEN_CLEAN, sql/02_grants.sql
 Every statement is printed with its outcome; the first failure stops with the full
@@ -59,6 +59,7 @@ def main() -> int:
     print("[1] DRYDOCK_SVC: schemas + DRYDOCK tables")
     run_file(svc, ROOT / "sql" / "00_schemas.sql")
     run_file(svc, ROOT / "sql" / "01_drydock_ddl.sql")
+    run_file(svc, ROOT / "sql" / "03_uploads.sql")
     if not a.skip_data:
         print("[2] admin: sources + BENCH + synthetic data")
         from bench.generate import generate, load
@@ -66,6 +67,7 @@ def main() -> int:
         got = load(ds, RECORD)
         print("  ", got)
     print("[3] DRYDOCK_SVC: reset GOLDEN + grants")
+    svc.run("DELETE FROM DRYDOCK.DATASET")      # setup loads the demo: make it the active dataset
     from reset import reset
     print("  ", reset(svc))
     write_record()

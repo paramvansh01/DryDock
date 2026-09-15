@@ -76,9 +76,9 @@ def ddl_statements() -> list[str]:
     out = []
     for f in files:
         out.extend(_split(f.read_text()))
-    # Runtime CTAS that defines GOLDEN.CUSTOMERS (scripts/reset.py); read from source, not retyped.
-    reset_src = (ROOT / "scripts" / "reset.py").read_text()
-    out.extend(re.findall(r'"(CREATE TABLE GOLDEN\.CUSTOMERS AS SELECT \* FROM BENCH\.GOLDEN_CLEAN)"', reset_src))
+    # Runtime CTAS that defines GOLDEN.CUSTOMERS (drydock/merge.py, reseed); read from source, not retyped.
+    merge_src = (ROOT / "drydock" / "merge.py").read_text()
+    out.extend(re.findall(r'"(CREATE TABLE GOLDEN\.CUSTOMERS AS SELECT \* FROM BENCH\.GOLDEN_CLEAN)"', merge_src))
     return out
 
 
