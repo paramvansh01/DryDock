@@ -17,7 +17,7 @@ exactly**.
 
 | | |
 |---|---|
-| **Pitch deck** | [Drydock Pitch Deck.pdf](Drydock Pitch Deck.pdf) |
+| **Pitch deck** | [Drydock Pitch Deck.pdf](Drydock%20Pitch%20Deck.pdf) |
 | **Source code** | [Project structure](#project-structure) |
 
 ---
@@ -365,7 +365,7 @@ sql/                DDL, grants and Exasol dialect evidence (DIALECT.md)
 scripts/            setup, verification, probing, reset, user creation
 tests/              offline tests and the live invariant suite
 ui/                 React + Vite + Tailwind web interface
-docs/               pitch deck and screenshots
+docs/               screenshots and diagrams
 ```
 
 ---
